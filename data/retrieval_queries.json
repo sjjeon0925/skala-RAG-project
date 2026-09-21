@@ -1,0 +1,50 @@
+[
+  {
+    "id": "itme-principle",
+    "technology": "ITME",
+    "query": "ITME 작동 원리 CXL hybrid memory architecture DMA prefetching",
+    "gold_pages": []
+  },
+  {
+    "id": "itme-setup",
+    "technology": "ITME",
+    "query": "ITME experimental setup GPU model batch size context length baseline",
+    "gold_pages": []
+  },
+  {
+    "id": "itme-performance",
+    "technology": "ITME",
+    "query": "ITME throughput latency performance evaluation baseline",
+    "gold_pages": []
+  },
+  {
+    "id": "itme-limitations",
+    "technology": "ITME",
+    "query": "ITME limitations bottleneck overhead discussion",
+    "gold_pages": []
+  },
+  {
+    "id": "cxl-principle",
+    "technology": "CXL-PIM",
+    "query": "CXL-PIM PNM token page selection attention 실행 위치",
+    "gold_pages": []
+  },
+  {
+    "id": "cxl-setup",
+    "technology": "CXL-PIM",
+    "query": "CXL-PIM GPU model batch size context length experimental setup",
+    "gold_pages": []
+  },
+  {
+    "id": "cxl-performance",
+    "technology": "CXL-PIM",
+    "query": "CXL-PIM TTFT TPOT throughput performance baseline",
+    "gold_pages": []
+  },
+  {
+    "id": "cxl-limitations",
+    "technology": "CXL-PIM",
+    "query": "CXL-PIM scalability memory bandwidth limitations overhead",
+    "gold_pages": []
+  }
+]

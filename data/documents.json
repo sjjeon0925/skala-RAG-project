@@ -1,5 +1,32 @@
 [
-  {"technology": "ITME", "role": "core", "path": "data/papers/ITME.pdf", "source_url": "https://arxiv.org/abs/2606.12556"},
-  {"technology": "CXL-PIM", "role": "core", "path": "data/papers/CXL-PIM.pdf", "source_url": "https://arxiv.org/abs/2511.00321"},
-  {"technology": "InfiniGen", "role": "supporting", "path": "data/papers/InfiniGen.pdf", "source_url": "https://arxiv.org/abs/2406.19707"}
+  {
+    "technology": "ITME",
+    "document_id": "ITME",
+    "role": "core",
+    "path": "data/papers/ITME.pdf",
+    "source_url": "https://arxiv.org/abs/2606.12556",
+    "title": "ITME: Inference Tiered Memory Expansion with Disaggregated CXL-Hybrid Memories",
+    "author": "Hakbeom Jang et al.",
+    "year": "2026"
+  },
+  {
+    "technology": "CXL-PIM",
+    "document_id": "CXL-PIM",
+    "role": "core",
+    "path": "data/papers/CXL-PIM.pdf",
+    "source_url": "https://arxiv.org/abs/2511.00321",
+    "title": "Scalable Processing-Near-Memory for 1M-Token LLM Inference: CXL-Enabled KV-Cache Management Beyond GPU Limits",
+    "author": "Dowon Kim et al.",
+    "year": "2025"
+  },
+  {
+    "technology": "InfiniGen",
+    "document_id": "InfiniGen",
+    "role": "supporting",
+    "path": "data/papers/InfiniGen.pdf",
+    "source_url": "https://arxiv.org/abs/2406.19707",
+    "title": "InfiniGen: Efficient Generative Inference of Large Language Models with Dynamic KV Cache Management",
+    "author": "Wonbeom Lee et al.",
+    "year": "2024"
+  }
 ]

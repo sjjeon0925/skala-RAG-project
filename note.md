@@ -1,5 +1,7 @@
 # Development Guide
 
+> 이전 설계 기록입니다. 최신 DOCX의 역할 분담(TRL은 State + Web, 시장은 Web), State 작성 책임 및 실행 방법은 README.md와 현재 코드를 확인하세요.
+
 ## 1. 프로젝트 목표
 
 본 프로젝트는 데이터센터·클라우드 환경에서 KV Cache 용량 문제를 해결하는
