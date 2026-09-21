@@ -1,0 +1,21 @@
+[project]
+name = "kv-cache-capstone"
+version = "0.1.0"
+description = "ITME와 CXL-PIM 데이터센터 적용성 비교 보고서 생성 코드 틀"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=1.0,<2",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+rag = [
+    "langchain-community",
+    "langchain-huggingface",
+    "sentence-transformers",
+    "faiss-cpu",
+    "rank-bm25",
+    "pymupdf",
+]
+
+# LLM 제공자와 Web Search 제공자는 구현 시 선택하여 의존성을 추가한다.

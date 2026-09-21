@@ -1,0 +1,5 @@
+[
+  {"technology": "ITME", "role": "core", "path": "data/papers/ITME.pdf", "source_url": null},
+  {"technology": "CXL-PIM", "role": "core", "path": "data/papers/CXL-PIM.pdf", "source_url": null},
+  {"technology": "InfiniGen", "role": "supporting", "path": "data/papers/InfiniGen.pdf", "source_url": null}
+]
