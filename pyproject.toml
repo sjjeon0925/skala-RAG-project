@@ -1,21 +1,25 @@
 [project]
 name = "kv-cache-capstone"
-version = "0.1.0"
-description = "ITME와 CXL-PIM 데이터센터 적용성 비교 보고서 생성 코드 틀"
-requires-python = ">=3.11"
+version = "0.2.0"
+description = "근거 검증과 다관점 평가 기반 ITME/CXL-PIM Agentic RAG 보고서"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "langgraph>=1.0,<2",
     "python-dotenv>=1.0,<2",
+    "pydantic>=2.10,<3",
+    "openai>=1.68,<3",
+    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]
 rag = [
-    "langchain-community",
-    "langchain-huggingface",
-    "sentence-transformers",
-    "faiss-cpu",
-    "rank-bm25",
-    "pymupdf",
+    "sentence-transformers>=3.4,<6",
+    "rank-bm25>=0.2.2,<1",
+    "pymupdf>=1.25,<2",
+    "numpy>=1.26,<3",
 ]
+dev = ["ruff>=0.11"]
 
-# LLM 제공자와 Web Search 제공자는 구현 시 선택하여 의존성을 추가한다.
+[tool.ruff]
+line-length = 110
+target-version = "py311"

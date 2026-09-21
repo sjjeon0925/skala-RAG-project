@@ -1,3 +1,5 @@
+> 이전 RAG 작업 분담 기록입니다. 현재 전체 구현과 실행 방법은 README.md를 확인하세요. 최신 구현은 NumPy 코사인 인덱스를 사용하며, 이 문서의 FAISS/미구현 안내는 현재 코드와 다릅니다.
+
 # RAG 파이프라인 구현 핸드아웃
 
 논문 PDF 3편을 검색하는 부분(`rag/`)을 구현한다. 그래프·Agent·State는 다른 사람이 작업 중이므로 건드리지 않는다.
@@ -68,16 +70,16 @@ chunk_to_evidence(chunk, *, perspective, score=None) -> dict
 
 ```python
 {
-    "evidence_id": "ITME-p3-c12",       # {document_id}-p{page}-c{청크 번호}. 같은 청크는 항상 같은 ID
+    "evidence_id": "ITME-p3-c12",  # {document_id}-p{page}-c{청크 번호}. 같은 청크는 항상 같은 ID
     "technology": "ITME",
-    "perspective": "technical",          # 호출자가 넘긴 값
-    "claim": "",                         # Agent가 채움
-    "source": "ITME",                    # document_id
-    "page": 3,                           # PDF 원본 쪽 번호, 1부터 시작
-    "experimental_condition": "",        # Agent가 채움 (성능 수치가 있을 때만)
+    "perspective": "technical",  # 호출자가 넘긴 값
+    "claim": "",  # Agent가 채움
+    "source": "ITME",  # document_id
+    "page": 3,  # PDF 원본 쪽 번호, 1부터 시작
+    "experimental_condition": "",  # Agent가 채움 (성능 수치가 있을 때만)
     "content": "청크 본문",
     "role": "core",
-    "source_url": "https://arxiv.org/abs/2606.12556",   # Reference 작성용
+    "source_url": "https://arxiv.org/abs/2606.12556",  # Reference 작성용
     "score": 0.031,
 }
 ```

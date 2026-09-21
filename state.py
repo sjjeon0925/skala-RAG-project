@@ -1,44 +1,55 @@
-"""설계서 4.1의 State 필드. 필드 이름과 개수(15개)는 설계서와 같다.
+"""설계서의 15개 State 필드. 병렬 노드는 자신의 analysis만 쓴다.
 
-설계서와 다른 두 가지:
-- retry_count: 기술 조사 재검색 루프는 하나뿐이라 dict가 아니라 int.
-- references: 병렬 평가 Agent가 함께 추가하므로 누적(operator.add) 리듀서를 둔다.
-  재검색으로 중복이 생기므로 Report 단계에서 중복을 제거한다.
-
-missing_evidence는 리듀서 없이 덮어쓴다.
-- 1차 검사: 매번 새로 계산해 덮어씀(재검색이 성공하면 자동으로 비워짐).
-- 2차 검사: Fan-in 뒤 단일 노드이므로 기존 목록에 이어 붙여 반환.
-- 재작성 질의는 별도 키 없이 각 항목의 "query"에 담는다:
-  {"technology": ..., "item": ..., "query": ...}
-
-dict/list 내부 구조는 아직 구현하지 않는다.
+references는 fan_in에서만 병합한다. 공용 list reducer가 필요하지 않다.
+missing_evidence는 근거 검사/기록 노드만 변경한다.
+재검색 질의는 retry_count와 부족 항목에서 재현하므로 숨은 전역 상태가 없다.
 """
 
-import operator
-from typing import Annotated, TypedDict
+from typing import TypedDict
 
 from config import DOMAIN, MAX_RETRIES, TECHNOLOGIES
 
 
+class Evidence(TypedDict):
+    evidence_id: str
+    technology: str
+    perspective: str
+    claim: str
+    source: str
+    page: int | None
+    experimental_condition: str
+    condition_source: dict
+    quote: str
+    source_url: str
+    document_id: str
+    chunk_id: str
+    role: str
+    item: str
+    kind: str
+    numeric: bool
+
+
 class ResearchState(TypedDict):
-    technologies: list
+    technologies: list[str]
     domain: str
-    technical_evidence: dict
+    technical_evidence: dict[str, Evidence]
     market_analysis: dict
     stakeholder_analysis: dict
     domain_analysis: dict
     trl_analysis: dict
-    missing_evidence: list
+    missing_evidence: list[dict]
     retry_count: int
     max_retries: int
     counter_evidence: dict
-    conflicts: list
+    conflicts: list[dict]
     synthesis: dict
-    references: Annotated[list, operator.add]
+    references: list[dict]
     final_report: str
 
 
-def initial_state() -> ResearchState:
+def initial_state(*, max_retries: int = MAX_RETRIES) -> ResearchState:
+    if not 0 <= max_retries <= 10:
+        raise ValueError("max_retries는 0~10 사이여야 함")
     return {
         "technologies": list(TECHNOLOGIES),
         "domain": DOMAIN,
@@ -49,7 +60,7 @@ def initial_state() -> ResearchState:
         "trl_analysis": {},
         "missing_evidence": [],
         "retry_count": 0,
-        "max_retries": MAX_RETRIES,
+        "max_retries": max_retries,
         "counter_evidence": {},
         "conflicts": [],
         "synthesis": {},

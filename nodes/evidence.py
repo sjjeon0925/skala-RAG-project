@@ -1,40 +1,89 @@
-from typing import Literal
+"""두 단계 충분성 검사와 한도 분기. 검색 실패와 근거 부족을 혼동하지 않는다."""
 
-from state import ResearchState
-
-
-def first_evidence_check(state: ResearchState) -> dict:
-    """1차 검사: 기술 근거 9항목과 성능 수치의 출처 확인.
-
-    TODO: 부족한 항목을 새로 계산해 missing_evidence를 덮어쓴다(충분하면 빈 목록).
-    재검색 한도 소진 시에도 이 결과가 그대로 남아 다음 단계로 전달된다.
-    """
-    raise NotImplementedError("1차 Evidence 충분성 검사를 구현하세요.")
+from config import EVALUATION_CRITERIA, PERSPECTIVES, TECHNICAL_EVIDENCE_ITEMS
+from evidence import all_evidence, valid_evidence, valid_ids
+from workflow_logging import get_logger
 
 
-def route_first_evidence(state: ResearchState) -> Literal["rewrite", "evaluate"]:
-    """설계서 본문의 분기: 충분하거나 재검색 한도 소진 시 평가 진행.
+def first_evidence_check(state):
+    evidence = [e for e in state["technical_evidence"].values() if valid_evidence(e)]
+    missing = []
+    for technology in state["technologies"]:
+        own = [e for e in evidence if e["technology"] == technology and e.get("role") == "core"]
+        for item in TECHNICAL_EVIDENCE_ITEMS:
+            present = bool(own) if item == "출처" else any(e["item"] == item for e in own)
+            if not present:
+                missing.append(
+                    {
+                        "stage": 1,
+                        "technology": technology,
+                        "item": item,
+                        "reason": "출처와 원문 인용이 검증된 근거 부족",
+                        "status": "pending",
+                    }
+                )
+    get_logger().info("EVIDENCE_CHECK | stage=1 | missing=%d", len(missing))
+    return {"missing_evidence": missing}
 
-    State를 바꾸지 않고 판단만 한다.
-    TODO: missing_evidence가 비었으면 evaluate, retry_count < max_retries면 rewrite,
-    아니면 evaluate.
-    """
-    raise NotImplementedError("1차 검사와 재검색 횟수에 따른 라우팅을 구현하세요.")
+
+def route_first_evidence(state):
+    return "retry" if any(x["stage"] == 1 for x in state["missing_evidence"]) else "evaluate"
 
 
-def query_rewrite(state: ResearchState) -> dict:
-    """Query Rewrite: 부족한 기술 근거에 맞춰 검색 질문 재작성.
-
-    TODO: retry_count를 1 올리고, missing_evidence 각 항목의 "query"에
-    재작성한 질의를 채워 반환한다(새 State 키를 만들지 않는다).
-    """
-    raise NotImplementedError("기술 조사 재검색용 Query Rewrite를 구현하세요.")
+def route_retry_limit(state):
+    return "rewrite" if state["retry_count"] < state["max_retries"] else "missing"
 
 
-def second_evidence_check(state: ResearchState) -> dict:
-    """2차 검사: 4개 관점의 근거 확인 후 부족한 정보를 기록.
+def query_rewrite(state):
+    # 15개 State 필드를 유지한다. 재작성은 순수 함수 rewrite_query로 구현되며
+    # technical에서 이 전략 번호와 부족 항목으로 정확히 재현한다.
+    count = state["retry_count"] + 1
+    get_logger().info("QUERY_REWRITE | strategy=%d | queries=%d", count, len(state["missing_evidence"]))
+    return {"retry_count": count}
 
-    TODO: 기존 missing_evidence에 관점별 부족 항목을 이어 붙여 반환한다.
-    전체 검색은 다시 반복하지 않고, 검사 후 다음 검증 단계로 진행한다.
-    """
-    raise NotImplementedError("2차 Evidence 검사와 근거 부족 기록을 구현하세요.")
+
+def record_first_missing(state):
+    get_logger().warning(
+        "RETRY_EXHAUSTED | retries=%d | missing=%d", state["retry_count"], len(state["missing_evidence"])
+    )
+    return {"missing_evidence": [{**x, "status": "retry_exhausted"} for x in state["missing_evidence"]]}
+
+
+def second_evidence_check(state):
+    evidence = all_evidence(state, include_counter=False)
+    missing = [dict(x) for x in state["missing_evidence"] if x["stage"] == 1]
+    for perspective in PERSPECTIVES:
+        findings = state[f"{perspective}_analysis"].get("findings", [])
+        for technology in state["technologies"]:
+            for criterion in EVALUATION_CRITERIA[perspective]:
+                covered = any(
+                    f["technology"] == technology
+                    and f["criterion"] == criterion
+                    and valid_ids(f["evidence_ids"], evidence)
+                    for f in findings
+                )
+                if not covered:
+                    missing.append(
+                        {
+                            "stage": 2,
+                            "technology": technology,
+                            "perspective": perspective,
+                            "item": criterion,
+                            "reason": "평가 주장 또는 연결 근거 부족",
+                            "status": "pending",
+                        }
+                    )
+    get_logger().info("EVIDENCE_CHECK | stage=2 | missing=%d", sum(x["stage"] == 2 for x in missing))
+    return {"missing_evidence": missing}
+
+
+def route_second_evidence(state):
+    return "missing" if any(x["stage"] == 2 for x in state["missing_evidence"]) else "verify"
+
+
+def record_second_missing(state):
+    return {
+        "missing_evidence": [
+            {**x, "status": "recorded"} if x["stage"] == 2 else dict(x) for x in state["missing_evidence"]
+        ]
+    }

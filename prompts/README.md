@@ -1,16 +1,16 @@
-# 프롬프트 작성 위치
+# 프롬프트와 검증 위치
 
-역할별 실제 프롬프트는 후속 구현 시 이 폴더에 작성한다.
+역할별 프롬프트는 코드와 함께 관리한다. 출력 계약은 schemas.py의 Pydantic 모델이다.
 
-| 대상 | 설계서의 요구 |
+| 위치 | 책임 |
 | --- | --- |
-| 기술 조사 | 원문에서 작동 원리, 저장·연산 위치, 이동 경로, 실험 환경, 수치, Baseline, 한계, 출처 추출 |
-| TRL | 공개 정보 기반 추정임을 표시 |
-| 시장 | 제품화, 채택, 생태계, 성장성, 도입 장벽 조사 |
-| 이해관계자 | 여러 입장의 의견과 Fact 구분 |
-| 도메인 | Capacity, Latency, Throughput, Bandwidth 등 평가 |
-| Query Rewrite | 부족한 기술 근거를 찾기 위한 질문 재작성 |
-| Counter-Evidence | 반대 및 제약 근거 조사, 미발견을 부재로 단정하지 않음 |
-| Conflict | 관점별 상충 및 실험 조건 차이 분석 |
-| 종합 | 우열 판정 없이 공통점·차이·Trade-off 정리 |
-| 보고서 | report_outline.md 목차와 설계서 5.3의 생성 원칙 준수 |
+| tools/llm.py | 비신뢰 자료 취급, 근거 기반 응답, OpenAI 구조화 출력 |
+| evidence.py | 기술/웹 자료에서 근거 추출, 인용문과 실험 조건 청크 검증 |
+| agents/common.py | 관점별 평가 기준, TRL 단계, Fact/Opinion/Inference |
+| nodes/verification.py | 반대 근거 검색 결과 판정, 상충 분석 |
+| agents/synthesis.py | State만을 사용한 종합 |
+| agents/report.py | 정해진 목차, 인용 필터링, 참고문헌 구성 |
+| rag/queries.py | 기술 부족 항목별 결정적 Query Rewrite |
+| report_outline.md | 설계서 보고서 목차 |
+
+원문 인용 검증은 문자열/출처 검증이며 의미적 사실 검증의 보증은 아니다. 보고서 제출 전 검토가 필요하다.

@@ -1,14 +1,39 @@
-from state import ResearchState
+"""기술 조사 Agent: RAG로 원문 사실을 수집하고 기존 근거와 ID 기준 병합."""
+
+from config import TECHNICAL_EVIDENCE_ITEMS
+from evidence import extract_evidence
+from rag.queries import rewrite_query
 
 
-def technical_agent(state: ResearchState) -> dict:
-    """기술 조사 Agent (RAG).
-
-    입력: technologies, missing_evidence(항목별 "query" 포함).
-    출력: technical_evidence, references. retry_count는 query_rewrite가 올린다.
-    TODO: ITME/CXL-PIM 원문에서 config.TECHNICAL_EVIDENCE_ITEMS 추출.
-    TODO: InfiniGen은 오프로딩·데이터 이동의 보조 근거로만 사용.
-    TODO: missing_evidence가 있으면 각 항목의 query로 해당 근거만 재검색해
-    기존 technical_evidence에 합친다.
-    """
-    raise NotImplementedError("기술 조사 Agent의 논문 검색·근거 추출을 구현하세요.")
+def technical_agent(state, services):
+    evidence = dict(state["technical_evidence"])
+    for technology in state["technologies"]:
+        items = [
+            x["item"]
+            for x in state["missing_evidence"]
+            if x.get("stage") == 1 and x.get("technology") == technology
+        ]
+        if state["retry_count"] == 0:
+            items = list(TECHNICAL_EVIDENCE_ITEMS)
+        if not items:
+            continue
+        chunks = {}
+        # 순위별 round-robin으로 여러 항목의 검색 결과가 문맥 한도를 공유한다.
+        lists = [
+            services.retriever.search(
+                rewrite_query(technology, item, state["retry_count"]),
+                perspective="technical",
+                technology=technology,
+                role="core",
+            )
+            for item in items
+        ]
+        for rank in range(services.settings.top_k):
+            for results in lists:
+                if rank < len(results):
+                    chunks.setdefault(results[rank]["chunk_id"], results[rank])
+        selected = list(chunks.values())[: services.settings.max_context_chunks]
+        evidence.update(
+            extract_evidence(services, selected, technology=technology, perspective="technical", items=items)
+        )
+    return {"technical_evidence": evidence}
