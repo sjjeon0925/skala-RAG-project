@@ -59,7 +59,7 @@ uv run python app.py --show-state
 uv run python app.py --show-graph
 ```
 
-`--show-state`는 표준 라이브러리만으로도 실행할 수 있다.
+`.env`의 키는 `config.py`가 `override=True`로 불러오므로 셸에 남은 같은 이름의 키보다 `.env`가 우선한다.
 RAG 의존성은 실제 구현 시 `uv sync --extra rag`로 설치할 수 있다.
 LLM과 Web Search 제공자는 설계서에서 지정하지 않아 아직 연결하지 않았다.
 
@@ -99,14 +99,19 @@ DEBUG는 각 노드의 입력 State 필드별 개수를 추가로 표시한다.
 
 ## 구현할 부분
 
-1. 원문 PDF와 실제 출처 URL을 준비하고 전체 200페이지 제한을 확인한다.
+1. (완료) 원문 PDF 3편(ITME 13쪽, CXL-PIM 13쪽, InfiniGen 18쪽, 합계 44쪽)을 `data/papers/`에 두었고 출처 URL은 `data/documents.json`에 있다.
 2. multilingual-e5-base와 BM25 기반 Hybrid Retrieval을 작성한다.
 3. 각 Agent와 검사 Node의 검색·모델 호출 본체를 채운다.
-4. 설계서 dict/list 필드 내부 구조, retry_count 사용 및 State 갱신 방식을 구체화한다.
+4. 설계서 dict/list 필드의 내부 구조(Evidence 등)를 구체화한다.
 5. 정해진 목차로 보고서 생성과 최종 PDF 저장을 연결한다.
 6. 검색 평가(Hit Rate@K, MRR), 실행 재현성, README Contributors를 작성한다.
 
-현재 State는 설계서의 필드와 타입을 그대로 유지하며, 공통 필드의 병렬 병합 정책은 추가하지 않았다.
+State는 설계서의 15개 필드를 유지하되 두 가지가 설계서 표와 다르다.
+
+- `retry_count`: 재검색 루프가 하나뿐이라 `dict`가 아니라 `int`.
+- `references`: 병렬 평가 Agent가 함께 추가하므로 누적 리듀서를 둔다. 중복은 Report 단계에서 제거한다.
+
+`missing_evidence`는 1차 검사가 덮어쓰고 2차 검사가 이어 붙이며, 재작성 질의는 각 항목의 `query`에 담는다.
 Graph의 재검색 한도 후 진행 및 2차 검사 후 진행은 설계서 4.3 본문의 흐름을 따른다.
 
 ## Contributors

@@ -48,7 +48,7 @@ def summarize_state(value) -> str:
             detail = f"{len(item)}개"
         elif isinstance(item, str):
             detail = f"{len(item)}자"
-        elif key == "max_retries" and isinstance(item, int):
+        elif key in ("max_retries", "retry_count") and isinstance(item, int):
             detail = str(item)
         else:
             detail = type(item).__name__

@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parent
+# 셸에 남은 만료된 키가 .env보다 우선하지 않도록 override=True.
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+
 TECHNOLOGIES = ["ITME", "CXL-PIM"]
 DOMAIN = "데이터센터·클라우드"
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
