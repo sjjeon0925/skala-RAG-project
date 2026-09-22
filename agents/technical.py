@@ -1,32 +1,37 @@
 """기술 조사 Agent: RAG로 원문 사실을 수집하고 기존 근거와 ID 기준 병합."""
 
-from config import TECHNICAL_EVIDENCE_ITEMS
 from evidence import extract_evidence
-from rag.queries import rewrite_query
+from rag.queries import technical_query_targets
+from state import technology_names
 
 
 def technical_agent(state, services):
     evidence = dict(state["technical_evidence"])
-    for technology in state["technologies"]:
-        items = [
-            x["item"]
-            for x in state["missing_evidence"]
-            if x.get("stage") == 1 and x.get("technology") == technology
-        ]
-        if state["retry_count"] == 0:
-            items = list(TECHNICAL_EVIDENCE_ITEMS)
-        if not items:
+    targets = technical_query_targets(
+        technology_names(state), state["missing_evidence"], state["retry_count"]
+    )
+    queries = state["search_queries"]
+    if len(queries) != len(targets):
+        raise ValueError("State search_queries와 기술 조사 대상 개수가 일치하지 않음")
+    planned = {}
+    for (technology, item), query in zip(targets, queries):
+        planned.setdefault(technology, []).append((item, query))
+
+    for technology in technology_names(state):
+        item_queries = planned.get(technology, [])
+        if not item_queries:
             continue
+        items = [item for item, _ in item_queries]
         chunks = {}
         # 순위별 round-robin으로 여러 항목의 검색 결과가 문맥 한도를 공유한다.
         lists = [
             services.retriever.search(
-                rewrite_query(technology, item, state["retry_count"]),
+                query,
                 perspective="technical",
                 technology=technology,
                 role="core",
             )
-            for item in items
+            for _, query in item_queries
         ]
         for rank in range(services.settings.top_k):
             for results in lists:

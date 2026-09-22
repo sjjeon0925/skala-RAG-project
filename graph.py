@@ -25,13 +25,14 @@ from state import ResearchState
 from workflow_logging import get_logger, log_node, log_router
 
 
-def build_graph(run_id="standalone", services=None):
+def build_graph(run_id="standalone", services=None, checkpointer=None):
     # --show-graph에서는 API 키/모델 다운로드 없이 컴파일 가능.
     logger = get_logger(run_id)
     logger.info("GRAPH_BUILD | 설계서 기반 Graph 구성 시작")
     builder = StateGraph(ResearchState)
     agents = {
         "technical": technical_agent,
+        "query_rewrite": query_rewrite,
         "trl": trl_agent,
         "market": market_agent,
         "stakeholder": stakeholder_agent,
@@ -55,7 +56,6 @@ def build_graph(run_id="standalone", services=None):
         {
             "first_check": first_evidence_check,
             "retry_limit": lambda state: {},
-            "query_rewrite": query_rewrite,
             "record_first_missing": record_first_missing,
             "fan_out": lambda state: {},
             "fan_in": fan_in,
@@ -95,4 +95,4 @@ def build_graph(run_id="standalone", services=None):
     builder.add_edge("synthesis", "report")
     builder.add_edge("report", END)
     logger.info("GRAPH_READY | nodes=%d | parallel=4", len(nodes))
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

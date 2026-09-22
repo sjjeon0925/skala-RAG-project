@@ -18,6 +18,8 @@ class ExtractedFact(StrictModel):
     numeric: bool
     experimental_condition: str
     condition_chunk_id: str
+    speaker: str
+    affiliation: str
 
 
 class Extraction(StrictModel):
@@ -44,12 +46,15 @@ class CounterResult(StrictModel):
     source_id: str
     counter_claim: str
     quote: str
+    kind: Literal["Fact", "Opinion"]
+    experimental_condition: str
 
 
 class Conflict(StrictModel):
     category: str
     description: str
     evidence_ids: list[str]
+    conditions: str
     implication: str
 
 

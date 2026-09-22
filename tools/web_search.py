@@ -1,11 +1,11 @@
-"""Tavily Web Search. 실패는 근거 미발견과 구분하여 호출자에게 전파한다."""
+"""수업 코드의 TavilySearch와 근거 State 사이의 최소 어댑터."""
 
 import hashlib
-import os
 from urllib.parse import urlsplit, urlunsplit
 
-from config import Settings
-from workflow_logging import get_logger, log_operation
+from langchain_teddynote.tools.tavily import TavilySearch
+
+from workflow_logging import log_operation
 
 
 def canonical_url(url: str) -> str:
@@ -15,66 +15,57 @@ def canonical_url(url: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path, parts.query, ""))
 
 
-class TavilySearch:
-    def __init__(self, settings: Settings, client=None):
-        self.settings = settings
-        self.api_key = os.getenv("TAVILY_API_KEY")
-        self.client = client
-        if not self.api_key and client is None:
-            raise ValueError("TAVILY_API_KEY 설정 필요")
+def create_web_search():
+    """03-WebSearch.ipynb와 같은 TavilySearch 도구를 생성한다."""
+    return TavilySearch()
 
-    @log_operation("WEB_SEARCH")
-    def search(self, query: str) -> list[dict]:
-        import httpx
 
-        payload = {
-            "query": query,
-            "search_depth": "advanced",
-            "topic": "general",
-            "max_results": self.settings.search_results,
-            "include_answer": False,
-            "include_raw_content": "text",
-        }
-        # 검색당 한 HTTP 요청. 반대 근거 노드에서 암묵적 재검색하지 않는다.
-        headers = {"Authorization": f"Bearer {self.api_key or ''}"}
-        if self.client is not None:
-            response = self.client.post("https://api.tavily.com/search", json=payload, headers=headers)
-        else:
-            with httpx.Client(timeout=self.settings.request_timeout) as client:
-                response = client.post("https://api.tavily.com/search", json=payload, headers=headers)
-        response.raise_for_status()
-        sources, seen = [], set()
-        for row in response.json().get("results", []):
-            url = canonical_url(row.get("url", ""))
-            content = row.get("raw_content") or row.get("content") or ""
-            if not url or not content.strip() or url in seen:
-                continue
-            seen.add(url)
-            sources.append(
-                {
-                    "chunk_id": "web-" + hashlib.sha256(url.encode()).hexdigest()[:16],
-                    "document_id": url,
-                    "source": row.get("title") or url,
-                    "source_url": url,
-                    "page": None,
-                    "role": "web",
-                    "content": content[:12000],
-                    "content_type": "full_text" if row.get("raw_content") else "snippet",
-                    "published_date": row.get("published_date") or "",
-                }
-            )
-        get_logger().info(
-            "WEB_RESULTS | sources=%d | snippets=%d",
-            len(sources),
-            sum(x["content_type"] == "snippet" for x in sources),
+def normalize_web_results(results: list[dict]) -> list[dict]:
+    """수업 도구 결과에 Evidence가 요구하는 ID·출처 필드만 보충한다."""
+    sources, seen = [], set()
+    for row in results:
+        url = canonical_url(row.get("url", ""))
+        content = row.get("raw_content") or row.get("content") or ""
+        if not url or not content.strip() or url in seen:
+            continue
+        seen.add(url)
+        sources.append(
+            {
+                "chunk_id": "web-" + hashlib.sha256(url.encode()).hexdigest()[:16],
+                "document_id": url,
+                "source": row.get("title") or url,
+                "source_url": url,
+                "page": None,
+                "role": "web",
+                "content": content[:12000],
+                "content_type": "full_text" if row.get("raw_content") else "snippet",
+                "published_date": row.get("published_date") or "",
+                "author": row.get("author") or "",
+                "source_type": "web",
+                "site_name": urlsplit(url).netloc,
+                "venue": "",
+                "identifier": "",
+            }
         )
-        return sources
+    return sources
 
 
-def search_web(query: str) -> list[dict]:
-    return TavilySearch(Settings.from_env()).search(query)
+@log_operation("WEB_SEARCH")
+def web_search(tool, query: str, *, max_results: int | None = None) -> list[dict]:
+    """수업 예제의 ``tavily_tool.search`` 호출을 그대로 사용한다."""
+    results = tool.search(
+        query=query,
+        topic="general",
+        max_results=max_results,
+        format_output=False,
+    )
+    return normalize_web_results(results)
+
+
+# 기존 프로젝트 호출부와의 호환성을 위한 별칭이다.
+search_web = web_search
 
 
 def summarize_web_sources(sources: list[dict]) -> dict:
-    """자료 목록 정규화. Fact/Opinion 의미 분석은 각 평가 Agent의 책임."""
+    """Fact/Opinion 의미 분석은 각 평가 Agent가 수행한다."""
     return {"sources": sources, "source_count": len(sources)}

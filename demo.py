@@ -1,7 +1,14 @@
 """API/모델 다운로드 없는 실행 흐름 검증용 가상 공급자. 실제 기술 사실이 아니다."""
 
 from config import Settings
-from schemas import Conflicts, CounterResult, Evaluation, Extraction, ReportDraft, Synthesis
+from schemas import (
+    Conflicts,
+    CounterResult,
+    Evaluation,
+    Extraction,
+    ReportDraft,
+    Synthesis,
+)
 from services import Services
 
 
@@ -27,20 +34,41 @@ class DemoWeb:
     def __init__(self):
         self.calls = []
 
-    def search(self, query):
+    def search(self, query, **kwargs):
         self.calls.append(query)
         return [
             {
-                "chunk_id": "demo-web",
-                "document_id": "demo-web",
-                "source": "DEMO 가상 웹 자료",
-                "source_url": "https://example.test/demo/web",
-                "page": None,
-                "role": "web",
+                "url": "https://example.test/demo/web",
+                "title": "DEMO 가상 웹 자료",
                 "content": "DEMO web evidence for workflow testing only. No real technology facts. "
                 "This synthetic claim has a synthetic limitation.",
             }
         ]
+
+
+class DemoQuestionRewriter:
+    def batch(self, inputs):
+        return [value["question"] + " rewritten" for value in inputs]
+
+
+class DemoReportWriter:
+    def invoke(self, value):
+        payload = value["payload"]
+        ids = list(payload["evidence"])
+        paragraphs = (
+            [
+                {
+                    "text": "DEMO: 실행 흐름 확인용 문단입니다. 실제 기술 분석이 아닙니다.",
+                    "evidence_ids": ids[:1],
+                }
+            ]
+            if ids
+            else []
+        )
+        return ReportDraft(
+            summary=paragraphs,
+            sections=[{"section_id": key, "paragraphs": paragraphs} for key in payload["sections"]],
+        )
 
 
 class DemoLLM:
@@ -70,6 +98,8 @@ class DemoLLM:
                         "numeric": False,
                         "experimental_condition": "",
                         "condition_chunk_id": "",
+                        "speaker": "",
+                        "affiliation": "",
                     }
                     for item in payload["items"]
                 ]
@@ -101,6 +131,8 @@ class DemoLLM:
                 source_id=source["chunk_id"] if found else "",
                 counter_claim="DEMO 가상 제약 사항" if found else "",
                 quote="This synthetic claim has a synthetic limitation." if found else "",
+                kind="Fact",
+                experimental_condition="",
             )
         if schema is Conflicts:
             return Conflicts(conflicts=[])
@@ -117,24 +149,16 @@ class DemoLLM:
                 else []
             )
             return Synthesis(summary=text, commonalities=text, differences=[], tradeoffs=[], conclusion=text)
-        if schema is ReportDraft:
-            ids = list(payload["evidence"])
-            paragraphs = (
-                [
-                    {
-                        "text": "DEMO: 실행 흐름 확인용 문단입니다. 실제 기술 분석이 아닙니다.",
-                        "evidence_ids": ids[:1],
-                    }
-                ]
-                if ids
-                else []
-            )
-            return ReportDraft(
-                summary=paragraphs,
-                sections=[{"section_id": key, "paragraphs": paragraphs} for key in payload["sections"]],
-            )
         raise ValueError("지원하지 않는 demo schema")
 
 
 def demo_services(scenario="normal", settings=None):
-    return Services(DemoLLM(scenario), DemoRetriever(), DemoWeb(), settings or Settings(), mode="demo")
+    return Services(
+        DemoLLM(scenario),
+        DemoRetriever(),
+        DemoWeb(),
+        settings or Settings(),
+        mode="demo",
+        question_rewriter=DemoQuestionRewriter(),
+        report_writer=DemoReportWriter(),
+    )

@@ -13,6 +13,8 @@ class Services:
     web: Any
     settings: Settings
     mode: str = "live"
+    question_rewriter: Any = None
+    report_writer: Any = None
 
 
 def live_services(settings=None):
@@ -24,6 +26,15 @@ def live_services(settings=None):
         raise ValueError("설정 필요: " + ", ".join(missing))
     from rag.pipeline import get_retriever
     from tools.llm import OpenAILLM
-    from tools.web_search import TavilySearch
+    from tools.query_rewrite import create_question_rewriter
+    from tools.report_writer import create_report_writer
+    from tools.web_search import create_web_search
 
-    return Services(OpenAILLM(settings), get_retriever(settings), TavilySearch(settings), settings)
+    return Services(
+        OpenAILLM(settings),
+        get_retriever(settings),
+        create_web_search(),
+        settings,
+        question_rewriter=create_question_rewriter(settings.model),
+        report_writer=create_report_writer(settings.model),
+    )

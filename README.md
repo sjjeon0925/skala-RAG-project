@@ -47,7 +47,7 @@ outputs/
   logs/날짜-실행ID.log
   날짜-실행ID/
     report.md     # SUMMARY, 1~6장, 근거 부록, 실제 인용한 REFERENCE
-    state.json    # 15개 State 필드 및 근거/평가 결과
+    state.json    # 16개 State 필드, 실제 검색 질의 및 근거/평가 결과
     run.json      # 실행 모드, 모델/검색 설정, 생성 시각
 ```
 
@@ -69,7 +69,7 @@ flowchart TD
   F --> M[시장 / Web]
   F --> S[이해관계자 / Web]
   F --> V[도메인 / State + RAG]
-  T --> J[Fan-in / 참고문헌 중복 제거]
+  T --> J[Fan-in / 4개 평가 결과 합류]
   M --> J
   S --> J
   V --> J
@@ -87,56 +87,57 @@ flowchart TD
 
 | 역할/기능 | 파일 | 입력과 책임 |
 | --- | --- | --- |
-| 기술 조사 | agents/technical.py | 핵심 논문 RAG, 9개 조사 항목의 인용 근거 추출 |
+| 기술 조사 | agents/technical.py | 핵심 논문 RAG, 보고서에 명시된 8개 조사 항목의 인용 근거 추출 |
 | TRL | agents/trl.py | technical_evidence + Web, 추정 성숙도; Vector DB 직접 호출 없음 |
 | 시장 | agents/market.py | Web 자료로 제품화·생태계·도입 장벽 |
 | 이해관계자 | agents/stakeholder.py | Web 자료로 개발자·도입 기업·HW 업체·산업계 |
-| 도메인 | agents/domain.py | RAG + 기술 근거, 8개 적용성 기준; InfiniGen은 보조 자료 |
+| 도메인 | agents/domain.py | RAG + 기술 근거, 용량·성능·데이터 이동·확장성·비용/구축의 5개 기준; 비교 문서는 보조 자료로 분리 |
 | 종합 | agents/synthesis.py | 4개 평가·반대 근거·상충·부족 항목 종합, 추가 검색 없음 |
-| 보고서 | agents/report.py | 기존 결과를 목차에 맞춰 구성, 새 평가/검색 없음 |
+| 보고서 | agents/report.py | contents_writer → report_generator, 새 평가/검색 없이 기존 결과를 목차에 맞춰 구성 |
 | 검사·재검색 | nodes/evidence.py | 1차/2차 검사, 한도 판단, 부족 근거 기록 |
 | 반증·상충 | nodes/verification.py | 주요 주장당 Web 검색 1회, 상충 분석 |
 | 근거 계약 | evidence.py, schemas.py | 인용문·ID 검증, 구조화 출력, 참고문헌 병합 |
-| Graph·State | graph.py, state.py | 17개 노드, 설계서의 State 필드 15개 |
+| Graph·State | graph.py, state.py | 17개 노드, 설계서의 State 필드 16개, 선택적 checkpointer 주입 |
 
 ### State와 루프 규칙
 
 - 각 병렬 평가 Agent는 자신의 `*_analysis`만 쓴다. 공용 list reducer에 기대지 않는다.
-- `references`는 Fan-in에서 출처 URL 기준으로 중복 제거한다. 이후 찾은 반대 근거는 `counter_evidence`에 보존하고, 보고서가 이를 포함해 **실제 인용한 출처만** 참고문헌에 표시한다.
+- `references`는 Report Agent가 본문에 **실제로 인용한 출처만** 중복 제거해 생성한다. 이후 찾은 반대 근거도 인용되면 최종 State에 포함한다.
 - `missing_evidence`는 검사/기록 노드만 변경한다. 1차 재검색 성공 시 기존 1차 부족 목록은 해소된다.
 - `retry_count`는 하나의 검색 루프를 나타내는 int이며 기본 한도는 2회다. `--max-retries 0`으로 재검색 없이 계속할 수도 있다.
-- Query Rewrite는 LLM 호출이 아닌 부족 항목별 한·영 키워드 재작성이다. `retry_count`가 재작성 전략을 나타내며, 기술 Agent가 `rag/queries.py`의 순수 함수로 질의를 재현한다. 숨은 전역 질의 캐시나 추가 State 필드는 없다.
+- Query Rewrite는 수업의 `04-QueryRewrite.ipynb`와 같은 `PromptTemplate | init_chat_model | StrOutputParser` 체인을 별도 Graph 노드에서 실행한다. 실제 재검색 질의는 `search_queries` State에 보존한다.
 - 한도를 소진해도 부족 정보를 유지한 채 평가를 진행한다. 2차 부족은 기록만 하고 전체 Agent를 재실행하지 않는다.
 - 반대 근거 검증은 기본 관점당 주요 주장 2개, 총 최대 8개다. 가능한 경우 두 기술을 균등하게 선택한다. 검색 0건은 not_found지만 API 실패는 예외다.
 
 ## RAG 구현
 
-문서: ITME 13페이지 + CXL-PIM 13페이지 + InfiniGen 18페이지 = 44페이지, 최대 허용 200페이지.
+문서: 핵심 ITME·CXL-PIM과 보조 InfiniGen·PagedAttention·Mooncake·CENT·CacheGen, 총 7개 116페이지다. 최대 허용은 200페이지다.
 
 1. PyMuPDF로 페이지별 텍스트 블록을 추출하고 두 단 편집의 읽기 순서를 정리한다.
 2. 페이지·문단·절 경계를 보존한다. 긴 문단만 토큰 기준으로 나누고 겹침을 적용한다.
 3. `technology, document_id, page, chunk_id, role, source_url`을 모든 청크에 보존한다.
 4. E5 입력에 `query: ` / `passage: `를 붙이고 임베딩을 정규화한다.
 5. Dense 코사인 순위와 BM25 순위를 RRF `Σ 1/(60+rank)`로 결합한다.
-6. 기술/문서 역할 필터를 반영한 순위를 구한 뒤 top-k를 선택한다.
+6. 기술/문서 역할 필터를 반영한 순위를 구한 뒤 top-k를 선택한다. 보조 논문은 각 문서의 기술명으로 분리해 대상 기술의 직접 근거와 섞지 않는다.
+
+Web Search는 수업의 `03-WebSearch.ipynb`에 사용된 `langchain_teddynote.tools.tavily.TavilySearch`와 `tavily_tool.search(...)` 호출을 직접 사용한다. 과제의 Evidence 필드에 맞추는 출처·ID 정규화만 수행한다.
 
 벡터 저장소는 **NumPy 정확 검색**이다. 이 소규모 코퍼스에서는 전체 행렬의 코사인 검색으로 충분하며, 로컬 검증 중 발견된 FAISS/PyTorch의 중복 OpenMP 충돌을 피한다. E5 + Dense/BM25라는 설계서는 유지하며, 특정 벡터 DB를 요구하지 않는다. 인덱스는 `vectors.npy`, `chunks.json`, `meta.json`으로 저장하고 pickle을 사용하지 않는다.
 
 모델 revision은 검증한 E5 버전으로 고정한다. PDF 내용·manifest·모델/revision·분할 설정·인덱스 형식이 바뀌면 새 캐시를 만든다. 기존 캐시는 삭제하지 않는다. 파일 해시/청크 수 검증에 실패한 캐시는 재생성한다.
 
-초기값은 400토큰, 긴 문단 겹침 40토큰, top-k 5다. **검색 정확도로 최적화한 수치가 아니다.** 실제 passage prefix와 특수 토큰을 포함해 512토큰 이하인지 검사한다. 표/그림의 수치는 OCR·표 구조 복원이 없으므로 자동 추출만으로 정확성을 보장하지 않는다.
+설계서 초기값에 맞춰 400토큰, 긴 문단 겹침 50토큰, Dense Top-K 10, BM25 Top-K 10, 최종 Top-K 10을 사용한다. **검색 정확도로 최적화한 수치는 아니다.** 실제 passage prefix와 특수 토큰을 포함해 512토큰 이하인지 검사한다. 표/그림의 수치는 OCR·표 구조 복원이 없으므로 자동 추출만으로 정확성을 보장하지 않는다.
 
 ### 검색 평가
 
-`data/retrieval_queries.json`에 원리·실험 환경·성능·한계점 질의를 준비했다. 정답 페이지를 임의로 채우지 않았다.
+`data/retrieval_queries.json`에 원리·실험 환경·성능·한계점 질의와 사람이 원문에서 확인한 정답 페이지를 기록했다.
 
 ```bash
 .venv/bin/python -m rag.evaluate --inspect
-# PDF를 검토하고 각 gold_pages에 {"document_id": "ITME", "page": 3} 같은 라벨 입력
-.venv/bin/python -m rag.evaluate --k 5
+.venv/bin/python -m rag.evaluate --k 10
 ```
 
-Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정답 라벨이 없으면 점수 계산을 거부한다. 임베딩 후보 모델 비교와 검색 정답 라벨링은 아직 수행하지 않았다.
+Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정답 라벨이 없으면 점수 계산을 거부한다. 동일한 8개 질의와 Top-K 10에서 base와 small을 비교했으며, base가 Dense/Hybrid Hit Rate@10 1.0으로 small의 0.875보다 높아 설계 기준 모델을 유지한다.
 
 ## 근거와 보고서 검증 범위
 
@@ -146,7 +147,7 @@ Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정�
 - 다른 기술의 근거만으로 대상 기술을 평가한 주장은 제외한다. TRL은 공개 정보 기반 추정임을 표시한다.
 - 조건이 다른 수치는 우열의 직접 근거로 사용하지 않도록 요청하고, 수치 근거의 조건과 비교 제한을 보고서에 남긴다.
 - 인용문 일치와 ID 검사는 **의미적 사실 검증을 완전히 대신하지 않는다**. 주장과 인용의 의미적 일치, 수치/단위, 추정 TRL, 웹 자료의 최신성은 최종 제출 전 검토가 필요하다.
-- SUMMARY는 700자 이내로 제한한다. 실제 반 페이지 여부는 제출 문서의 글꼴/레이아웃에 따라 확인해야 한다.
+- SUMMARY는 700자 이내로 제한한다. 최종 구조는 SUMMARY, 1~6장, REFERENCE만 사용하며 검증 내용은 5~6장에 포함한다. 실제 반 페이지 여부는 제출 문서의 글꼴/레이아웃에 따라 확인해야 한다.
 
 ## 실행 흐름 로그
 
@@ -163,7 +164,7 @@ Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정�
 | GRAPH_BUILD / GRAPH_READY | Graph 구성·컴파일 |
 | NODE_START / NODE_DONE / NODE_FAILED | 노드, 시간, 갱신 State 필드/크기, 오류 위치 |
 | ROUTE_SELECTED / QUERY_REWRITE / RETRY_EXHAUSTED | 분기, 재검색 전략, 한도 소진 |
-| FAN_OUT / FAN_IN | 4개 병렬 평가 시작과 합류 |
+| FAN_OUT / FAN_IN / EVALUATIONS_JOINED | 4개 병렬 평가 시작과 합류 |
 | OP_START / OP_DONE / OP_FAILED | PDF·분할·임베딩·검색·API 처리 단계 |
 | EVIDENCE_CHECK / EVIDENCE_EXTRACTED | 부족 개수, 채택/제외 근거 수 |
 | EVALUATION_READY / COUNTER_RESULT / CONFLICT_RESULT | 관점 결과와 검증 결과 |

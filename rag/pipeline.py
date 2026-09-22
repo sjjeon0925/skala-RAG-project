@@ -57,18 +57,18 @@ def _ordered_blocks(page):
 
 @log_operation("PDF_LOAD")
 def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
-    import fitz
+    import pymupdf
 
     rows = _manifest_rows(manifest)
     counts = []
     for row in rows:
-        with fitz.open(row["path"]) as pdf:
+        with pymupdf.open(row["path"]) as pdf:
             counts.append(len(pdf))
     if sum(counts) > MAX_DOCUMENT_PAGES:
         raise ValueError(f"문서 합계가 {MAX_DOCUMENT_PAGES}페이지 상한 초과")
     documents = []
     for row, count in zip(rows, counts):
-        with fitz.open(row["path"]) as pdf:
+        with pymupdf.open(row["path"]) as pdf:
             for number, page in enumerate(pdf, 1):
                 paragraphs = []
                 for block in _ordered_blocks(page):
@@ -92,6 +92,11 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
                         "content": "\n\n".join(paragraphs),
                         "author": row.get("author", ""),
                         "year": row.get("year", ""),
+                        "published_date": row.get("published_date", ""),
+                        "source_type": row.get("source_type", "paper"),
+                        "venue": row.get("venue", ""),
+                        "identifier": row.get("identifier", ""),
+                        "site_name": row.get("site_name", ""),
                     }
                 )
         get_logger().info("PDF_READY | document=%s | pages=%d", row["document_id"], count)
@@ -282,12 +287,12 @@ class HybridRetriever:
             vector = np.asarray([self.embeddings.embed_query(query)], dtype="float32")
             # subset을 다 찾은 뒤 필터링: 다른 기술이 top-k를 독점하지 않게 한다.
             _, ids = self.index.search(vector, len(self.chunks))
-            rankings.append([int(i) for i in ids[0] if int(i) in eligible][: max(20, k * 4)])
+            rankings.append([int(i) for i in ids[0] if int(i) in eligible][: self.settings.dense_k])
         if mode in ("bm25", "hybrid"):
             scores = self.bm25.get_scores(lexical_tokens(query))
             rankings.append(
                 sorted((i for i in eligible if scores[i] > 0), key=lambda i: (-scores[i], i))[
-                    : max(20, k * 4)
+                    : self.settings.bm25_k
                 ]
             )
         fused = {}

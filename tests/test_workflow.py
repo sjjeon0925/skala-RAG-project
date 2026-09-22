@@ -25,10 +25,11 @@ class WorkflowTests(unittest.TestCase):
         )
         return result, services
 
-    def test_normal_full_run_preserves_15_fields(self):
+    def test_normal_full_run_preserves_16_fields(self):
         state, services = self.run_scenario()
         self.assertEqual(set(state), set(initial_state()))
-        self.assertEqual(len(state), 15)
+        self.assertEqual(len(state), 16)
+        self.assertEqual(len(state["search_queries"]), 16)
         self.assertFalse(state["missing_evidence"])
         self.assertEqual(state["retry_count"], 0)
         for perspective in PERSPECTIVES:
@@ -36,6 +37,19 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(technologies, {"ITME", "CXL-PIM"})
         self.assertIn("DEMO / 테스트용", state["final_report"])
         self.assertIn("## REFERENCE", state["final_report"])
+        self.assertNotIn("근거 검증 부록", state["final_report"])
+        self.assertNotIn("CITE:", state["final_report"])
+        for heading in (
+            "## SUMMARY",
+            "## 1. 분석 배경 및 문제 정의",
+            "## 2. 평가 대상 기술 선정",
+            "## 3. 기술 개요",
+            "## 4. 다관점 평가",
+            "## 5. 관점 간 종합 및 시사점",
+            "## 6. 분석 한계 및 신뢰성 확보",
+            "### 4.4 데이터센터·클라우드 적용성",
+        ):
+            self.assertIn(heading, state["final_report"])
         self.assertEqual(len(services.web.calls), 6 + 8)
         self.assertTrue(all(x["search_count"] == 1 for x in state["counter_evidence"].values()))
 
@@ -49,7 +63,7 @@ class WorkflowTests(unittest.TestCase):
         state, _ = self.run_scenario("retry_exhausted")
         self.assertEqual(state["retry_count"], 2)
         gaps = [x for x in state["missing_evidence"] if x["stage"] == 1]
-        self.assertEqual(len(gaps), 18)
+        self.assertEqual(len(gaps), 16)
         self.assertTrue(all(x["status"] == "retry_exhausted" for x in gaps))
         self.assertIn("미확인: ITME", state["final_report"])
 
@@ -65,13 +79,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(services.llm.technical_calls["ITME"], 1)
         self.assertTrue(state["final_report"])
 
-    def test_counter_found_is_cited_without_mutating_fanin_references(self):
+    def test_counter_found_is_cited_and_saved_in_final_references(self):
         state, _ = self.run_scenario("counter_found")
         self.assertTrue(all(x["status"] == "found" for x in state["counter_evidence"].values()))
         self.assertIn("DEMO 가상 제약 사항", state["final_report"])
-        self.assertTrue(
-            all(not e.startswith("counter-") for r in state["references"] for e in r["evidence_ids"])
-        )
+        self.assertTrue(any(e.startswith("counter-") for r in state["references"] for e in r["evidence_ids"]))
 
     def test_four_evaluators_really_parallel_and_join_once(self):
         barrier = threading.Barrier(4)

@@ -7,12 +7,13 @@ from evidence import extract_evidence, valid_ids
 from graph import build_graph
 from schemas import Extraction
 from state import initial_state
+from tools.web_search import web_search
 
 
 class EvidenceTests(unittest.TestCase):
     def test_web_same_quote_has_distinct_ids_for_each_technology(self):
         services = demo_services()
-        chunks = services.web.search("test")
+        chunks = web_search(services.web, "test")
         a = extract_evidence(services, chunks, technology="ITME", perspective="market", items=["시장"])
         b = extract_evidence(services, chunks, technology="CXL-PIM", perspective="market", items=["시장"])
         self.assertTrue(a and b)
@@ -30,6 +31,8 @@ class EvidenceTests(unittest.TestCase):
             "numeric": True,
             "experimental_condition": "",
             "condition_chunk_id": "",
+            "speaker": "",
+            "affiliation": "",
         }
         for change in (
             {},
@@ -95,6 +98,8 @@ class EvidenceTests(unittest.TestCase):
                     "numeric": True,
                     "experimental_condition": conditions["content"],
                     "condition_chunk_id": "condition-page",
+                    "speaker": "",
+                    "affiliation": "",
                 }
             ]
         )

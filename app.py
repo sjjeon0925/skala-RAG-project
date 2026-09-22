@@ -17,10 +17,13 @@ from workflow_logging import ACTIVE_RUN, configure_logging, error_location, get_
 def preflight(settings):
     modules = (
         "langgraph",
+        "langchain",
+        "langchain_openai",
+        "langchain_teddynote",
         "pydantic",
         "openai",
         "httpx",
-        "fitz",
+        "pymupdf",
         "numpy",
         "sentence_transformers",
         "rank_bm25",

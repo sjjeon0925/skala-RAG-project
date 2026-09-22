@@ -19,7 +19,7 @@ from rag.pipeline import (
     split_documents,
 )
 
-AVAILABLE = all(importlib.util.find_spec(n) for n in ("fitz", "numpy", "rank_bm25"))
+AVAILABLE = all(importlib.util.find_spec(n) for n in ("pymupdf", "numpy", "rank_bm25"))
 
 
 class WordTokenizer:
@@ -50,11 +50,11 @@ class TinyEmbeddings:
 @unittest.skipUnless(AVAILABLE, "uv sync --extra rag 필요")
 class RagTests(unittest.TestCase):
     def fixture(self, root, text="ITME RDMA memory expansion and data transfer."):
-        import fitz
+        import pymupdf
 
         data = root / "data"
         data.mkdir(exist_ok=True)
-        pdf = fitz.open()
+        pdf = pymupdf.open()
         page = pdf.new_page()
         page.insert_text((72, 72), text)
         pdf.save(data / "paper.pdf")
@@ -76,10 +76,13 @@ class RagTests(unittest.TestCase):
             Settings(), manifest=manifest, index_dir=root / "index", chunk_tokens=20, overlap_tokens=3
         )
 
-    def test_real_corpus_is_44_pages_and_preserves_metadata(self):
+    def test_real_corpus_is_116_pages_and_preserves_metadata(self):
         documents = load_documents()
-        self.assertEqual(len(documents), 44)
-        self.assertEqual({x["technology"] for x in documents}, {"ITME", "CXL-PIM", "InfiniGen"})
+        self.assertEqual(len(documents), 116)
+        self.assertEqual(
+            {x["technology"] for x in documents},
+            {"ITME", "CXL-PIM", "InfiniGen", "PagedAttention", "Mooncake", "CENT", "CacheGen"},
+        )
         self.assertTrue(all(x["page"] > 0 and x["source_url"] for x in documents))
 
     def test_page_limit_and_missing_input(self):
@@ -139,10 +142,10 @@ class RagTests(unittest.TestCase):
             get_retriever(settings, embeddings=embeddings)
             self.assertEqual(embeddings.document_calls, 2)
             # PDF 내용이 바뀌면 fingerprint가 달라져야 한다.
-            import fitz
+            import pymupdf
 
             pdf_path = root / "data/paper.pdf"
-            with fitz.open(pdf_path) as pdf:
+            with pymupdf.open(pdf_path) as pdf:
                 pdf[0].insert_text((72, 100), "Additional CXL memory content")
                 pdf.saveIncr()
             get_retriever(settings, embeddings=embeddings)

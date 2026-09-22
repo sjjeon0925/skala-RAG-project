@@ -5,7 +5,7 @@
 ## 코드 검증
 
 - Python 3.11, 프로젝트 전용 .venv와 uv.lock 사용.
-- unittest 33개 통과.
+- unittest 34개 통과.
 - Ruff 검사 통과.
 - 정상 진행, 재검색 성공, 2회 소진 후 계속 진행, 재검색 0회, 2차 부족 기록 경로 확인.
 - 4개 평가 노드의 동시 실행을 Barrier로 확인하고 Fan-in 1회 실행 검증.
@@ -20,11 +20,12 @@
 - 로컬 PDF: ITME 13페이지, CXL-PIM 13페이지, InfiniGen 18페이지.
 - E5 모델: intfloat/multilingual-e5-base.
 - 모델 revision: d128750597153bb5987e10b1c3493a34e5a4502a.
-- 400토큰/긴 문단 overlap 40 설정으로 263개 청크 생성.
-- 실제 passage 입력의 최대 길이: 접두어와 특수 토큰 포함 405토큰.
-- 대표 질의 8개 × Dense/BM25/Hybrid 3방식 = 검색 24회 모두 결과 반환.
-- 검색 후보 원문/페이지는 outputs/retrieval-inspection.json에 로컬 저장 (Git 제외).
-- 정답 라벨이 없으므로 Hit Rate/MRR 점수는 산출하지 않았다. 결과 반환은 검색 품질 보증이 아니다.
+- 현재 7개 문서 116페이지, 657개 청크를 로드·인덱싱했다.
+- 실제 passage 입력은 접두어와 특수 토큰을 포함해 512토큰을 넘으면 실패하도록 검사한다.
+- 핵심 논문 원문에서 대표 질의 8개의 정답 페이지를 사람이 확인해 `data/retrieval_queries.json`에 기록했다.
+- Top-K 10 기준 multilingual-e5-base: Dense Hit Rate 1.0 / MRR 0.7333, BM25 0.875 / 0.5667, Hybrid 1.0 / 0.6167.
+- 동일 조건 multilingual-e5-small: Dense Hit Rate 0.875 / MRR 0.2765, BM25 0.875 / 0.5667, Hybrid 0.875 / 0.4396.
+- passage 657개 임베딩은 측정 실행에서 base 약 14.2초, small 약 5.0초였다. small이 빠르지만 검색 품질이 낮아 base를 유지했다.
 - PDF/설정 변경과 손상된 캐시의 재생성, 동일 입력의 캐시 재사용을 자동 테스트했다.
 
 ## 로컬 호환성 수정
@@ -36,8 +37,6 @@ E5 Dense + BM25 + RRF 구성은 유지한다.
 
 ## 아직 검증하지 않은 범위
 
-- 실제 OpenAI + Tavily 전체 실행과 그 보고서의 내용 품질.
-- 현재 환경에서 Tavily API 키 미설정. 키를 설정한 후 실제 실행이 필요하다.
-- 사람이 라벨링한 정답 페이지 기반 검색 평가 및 임베딩 후보 비교.
+- 실제 OpenAI + Tavily 전체 실행과 그 보고서의 내용 품질. 사전 점검에서 키 존재는 확인했지만 인증·잔액·모델 권한은 검증하지 않았다.
 - 표/그래프 수치의 의미적 해석, 웹 자료 최신성, 주장과 인용의 의미적 일치.
 - PDF/DOCX 보고서 변환 및 시각적 레이아웃. 현재 산출 형식은 Markdown.

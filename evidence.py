@@ -5,7 +5,7 @@ import re
 
 from config import PERSPECTIVES
 from schemas import Extraction
-from workflow_logging import get_logger, log_operation
+from workflow_logging import get_logger
 
 
 def normalized(text):
@@ -23,9 +23,11 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
         "extract:" + perspective,
         "자료에서 해당 기술의 항목별 근거를 추출한다. item은 items 중 하나만 사용. "
         "quote는 claim을 지지하는 원문 그대로. 숫자 성능/비용 주장이면 numeric=true. "
-        "numeric이면 experimental_condition에 실험 환경 원문을 복사하고 condition_chunk_id에 "
+        "numeric이면 단위·Baseline·GPU·모델·Context Length·요청 수·Batch 중 확인되는 실험 조건 원문을 "
+        "experimental_condition에 복사하고 condition_chunk_id에 "
         "그 구절의 청크 ID를 넣는다. 동일 문서의 다른 페이지도 가능. 비수치면 두 필드는 빈 문자열. "
         "자료에서 조건을 못 찾으면 수치 주장을 추출하지 말 것. 웹 Opinion은 Fact로 바꾸지 말 것. "
+        "실제 발언이면 speaker와 affiliation을 자료에 적힌 그대로 기록하고, 없으면 빈 문자열로 둔다. "
         "보조 기술 문서를 대상 기술의 직접 성능 근거로 사용하지 말 것.",
         {"technology": technology, "items": list(items), "chunks": chunks},
         Extraction,
@@ -40,6 +42,13 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
             or fact.item not in items
             or not fact.claim.strip()
             or not quote_exists(fact.quote, source["content"])
+            or (
+                (fact.speaker and normalized(fact.speaker).lower() not in normalized(source["content"]).lower())
+                or (
+                    fact.affiliation
+                    and normalized(fact.affiliation).lower() not in normalized(source["content"]).lower()
+                )
+            )
             or (
                 fact.numeric
                 and (
@@ -78,6 +87,8 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
                 else {}
             ),
             "item": fact.item,
+            "speaker": fact.speaker,
+            "affiliation": fact.affiliation,
         }
     get_logger().info(
         "EVIDENCE_EXTRACTED | perspective=%s | accepted=%d | rejected=%d",
@@ -128,6 +139,10 @@ def collect_references(evidence):
                 "author": item.get("author", ""),
                 "year": item.get("year", ""),
                 "published_date": item.get("published_date", ""),
+                "source_type": item.get("source_type", "paper" if item.get("page") else "web"),
+                "venue": item.get("venue", ""),
+                "identifier": item.get("identifier", ""),
+                "site_name": item.get("site_name", ""),
                 "evidence_ids": [],
                 "pages": [],
             },
@@ -138,9 +153,8 @@ def collect_references(evidence):
     return list(refs.values())
 
 
-@log_operation("REFERENCE_MERGE")
 def fan_in(state):
-    # 각 parallel Agent는 자신의 analysis만 반환하므로 shared-key write 충돌이 없다.
-    refs = collect_references(all_evidence(state, include_counter=False))
-    get_logger().info("REFERENCES_READY | unique_sources=%d", len(refs))
-    return {"references": refs}
+    """병렬 평가 완료 장벽. references는 보고서가 실제 인용 기준으로만 생성한다."""
+    completed = sum(bool(state[f"{perspective}_analysis"]) for perspective in PERSPECTIVES)
+    get_logger().info("EVALUATIONS_JOINED | completed=%d", completed)
+    return {}
