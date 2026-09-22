@@ -8,9 +8,5 @@ def market_agent(state, services):
         state,
         services,
         "market",
-        web_sources(
-            state,
-            services,
-            "product commercialization adoption support ecosystem market size growth barriers",
-        ),
+        web_sources(state, services, "market"),
     )

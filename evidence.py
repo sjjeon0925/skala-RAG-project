@@ -3,7 +3,7 @@
 import hashlib
 import re
 
-from config import PERSPECTIVES
+from config import FACT_MAX_TIER, PERSPECTIVES, TECHNICAL_FACT_MAX_TIER
 from schemas import Extraction
 from workflow_logging import get_logger
 
@@ -14,6 +14,28 @@ def normalized(text):
 
 def quote_exists(quote, content):
     return len(normalized(quote)) >= 12 and normalized(quote) in normalized(content)
+
+
+NUMBER = re.compile(r"(?<![A-Za-z0-9])\d+(?:[.,]\d+)*")
+UNIT = re.compile(
+    r"(?<![A-Za-z0-9])\d+(?:[.,]\d+)*\s*"
+    r"(%|×|x\b|배|ms\b|us\b|s\b|[KMGT]i?B(?:/s)?\b|tokens?/s\b)",
+    re.IGNORECASE,
+)
+
+
+def numeric_supported(claim, evidence):
+    """주장에 쓰인 숫자와 단위가 인용 원문에 실제로 있는지 확인한다."""
+    original = " ".join(
+        str(e.get(k, ""))
+        for e in evidence
+        for k in ("quote", "experimental_condition", "year", "published_date")
+    )
+    if not set(NUMBER.findall(normalized(claim))).issubset(NUMBER.findall(normalized(original))):
+        return False
+    expected = {m.group(0).replace(" ", "").lower() for m in UNIT.finditer(normalized(original))}
+    actual = {m.group(0).replace(" ", "").lower() for m in UNIT.finditer(normalized(claim))}
+    return actual.issubset(expected)
 
 
 def extract_evidence(services, chunks, *, technology, perspective, items):
@@ -42,6 +64,21 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
             or fact.item not in items
             or not fact.claim.strip()
             or not quote_exists(fact.quote, source["content"])
+            # 다른 기술의 자료를 대상 기술 근거로 쓰지 않는다.
+            or (source.get("role") == "core" and source.get("technology") != technology)
+            # 주장에 쓰인 수치·단위가 원문에 없으면 채택하지 않는다.
+            or not numeric_supported(fact.claim, [{"quote": fact.quote,
+                                                   "experimental_condition": fact.experimental_condition}])
+            # 저품질 출처는 Opinion으로만 쓴다. 기술 Fact는 논문·공식 문서만 인정한다.
+            # (demo는 가상 URL이라 등급 정책을 적용하지 않는다.)
+            or (
+                getattr(services, "mode", "live") != "demo"
+                and
+                fact.kind == "Fact"
+                and source.get("role") == "web"
+                and source.get("source_tier", 5)
+                > (TECHNICAL_FACT_MAX_TIER if perspective in ("technical", "domain", "trl") else FACT_MAX_TIER)
+            )
             or (
                 (fact.speaker and normalized(fact.speaker).lower() not in normalized(source["content"]).lower())
                 or (

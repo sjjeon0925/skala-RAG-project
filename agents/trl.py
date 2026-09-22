@@ -4,9 +4,5 @@ from agents.common import evaluate, web_sources
 
 
 def trl_agent(state, services):
-    sources = web_sources(
-        state,
-        services,
-        "paper PoC prototype real-world validation commercial product maturity",
-    )
+    sources = web_sources(state, services, "trl")
     return evaluate(state, services, "trl", sources, state["technical_evidence"])

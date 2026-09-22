@@ -56,6 +56,81 @@ EVALUATION_GUIDANCE = {
 }
 
 
+# 출처 우선순위. 앞 단계일수록 신뢰도가 높으며, 검색 결과를 이 순서로 정렬한다.
+# 어느 단계에도 없는 도메인은 2차 자료로 보고 순위를 뒤로 미룬다.
+SOURCE_PRIORITY = (
+    # 1. 논문
+    (
+        "arxiv.org", "ar5iv.labs.arxiv.org", "dl.acm.org", "acm.org",
+        "ieeexplore.ieee.org", "ieee.org", "usenix.org", "openreview.net",
+    ),
+    # 2. 표준·공식 기술문서
+    (
+        "computeexpresslink.org", "nvidia.com", "developer.nvidia.com",
+        "intel.com", "amd.com", "samsung.com", "semiconductor.samsung.com",
+        "skhynix.com", "news.skhynix.com",
+    ),
+    # 3. 특허
+    ("patents.google.com", "uspto.gov", "patentscope.wipo.int", "wipo.int"),
+    # 4. 시장·제품 정보 (기업 공시·애널리스트)
+    ("sec.gov", "gartner.com", "idc.com"),
+)
+TRUSTED_DOMAINS = tuple(domain for tier in SOURCE_PRIORITY for domain in tier)
+
+
+def source_tier(url: str) -> int:
+    """URL의 출처 등급(1~4)을 돌려준다. 목록에 없으면 5(2차 자료)."""
+    host = url.split("//")[-1].split("/")[0].split("?")[0].lower()
+    for index, tier in enumerate(SOURCE_PRIORITY, 1):
+        if any(host == domain or host.endswith("." + domain) for domain in tier):
+            return index
+    return 5
+
+
+# 기술 × 평가 기준 단위 검색어. 기준마다 별도 질의를 던져 자료 편중을 막는다.
+QUERY_TERMS = {
+    "검증 단계": "proof of concept prototype validation stage",
+    "실환경 검증": "production deployment operational validation",
+    "제품화 근거": "commercial product roadmap availability",
+    "제품화": "commercial product availability launch",
+    "실제 도입": "customer deployment adoption case",
+    "지원 생태계": "software ecosystem toolchain support",
+    "시장 규모·성장성": "market size growth forecast",
+    "도입 장벽": "adoption barrier integration cost",
+    "기대 효과": "expected benefit developer operator statement",
+    "비용 부담": "cost burden capex opex concern",
+    "호환성": "compatibility interoperability integration",
+    "도입 난이도": "deployment migration difficulty",
+    "운영상 우려": "operations reliability maintenance concern",
+    "용량": "KV cache capacity HBM reduction",
+    "성능": "latency TTFT TPOT throughput baseline",
+    "데이터 이동": "bandwidth data movement attention placement",
+    "확장성": "context length concurrent request scalability",
+    "비용과 구축 복잡도": "hardware cost integration complexity",
+}
+
+# 대상 기술을 고유하게 지칭하는 명칭. 약어만으로는 동명이의 자료가 섞인다.
+TECH_PROFILES = {
+    "ITME": {
+        "paper_ids": ("2606.12556",),
+        "distinctive": ("Inference Tiered Memory Expansion", "Disaggregated CXL-Hybrid"),
+        "ambiguous": ("ITME",),
+    },
+    "CXL-PIM": {
+        "paper_ids": ("2511.00321",),
+        "distinctive": ("Scalable Processing-Near-Memory", "PNM-KV", "1M-Token LLM Inference"),
+        "ambiguous": ("CXL-PIM", "CXL-PNM", "CXL PNM"),
+    },
+}
+
+# 출처 등급별 허용 용도. 저품질 출처를 제거하지는 않되 Fact 근거로는 쓰지 않는다.
+#   1~2 논문·공식 문서 : 기술/제품 Fact 가능
+#   3~4 특허·시장 자료 : 시장 전망 Fact 가능
+#   5   블로그·SNS 등  : Opinion 전용
+FACT_MAX_TIER = 4
+TECHNICAL_FACT_MAX_TIER = 2
+
+
 @dataclass(frozen=True)
 class Settings:
     """설계서 미지정 파라미터는 교체 가능하며 최적값으로 간주하지 않는다."""

@@ -1,10 +1,15 @@
 """4개 관점 평가의 공통 검증. 역할/자료 선택은 각 Agent에서 정한다."""
 
-from config import EVALUATION_CRITERIA, EVALUATION_GUIDANCE
+from config import (
+    EVALUATION_CRITERIA,
+    EVALUATION_GUIDANCE,
+    QUERY_TERMS,
+    TECH_PROFILES,
+)
 from evidence import extract_evidence, valid_ids
 from schemas import Evaluation
 from state import technology_names
-from tools.web_search import web_search
+from tools.web_search import relevance, web_search
 from workflow_logging import get_logger
 
 
@@ -91,12 +96,34 @@ def evaluate(state, services, perspective, sources, evidence=None):
     }
 
 
-def web_sources(state, services, suffix):
-    return {
-        tech: web_search(
-            services.web,
-            f'"{tech}" KV cache {suffix}',
-            max_results=services.settings.search_results,
-        )
-        for tech in technology_names(state)
-    }
+def web_sources(state, services, perspective):
+    """기술 × 평가 기준 단위로 검색한다. 기본 1회, 결과가 없을 때만 대체 질의 1회."""
+    sources = {}
+    for technology in technology_names(state):
+        profile = TECH_PROFILES.get(technology, {})
+        primary = (list(profile.get("distinctive", ())) or [technology])[0]
+        rows, seen = [], set()
+        for criterion in EVALUATION_CRITERIA[perspective]:
+            terms = QUERY_TERMS.get(criterion, criterion)
+            for query in (f'"{primary}" {terms}', f'"{technology}" KV cache {terms}'):
+                relevant = 0
+                for candidate in web_search(
+                    services.web, query, max_results=services.settings.search_results
+                ):
+                    scope = (
+                        "direct"
+                        if services.mode == "demo"
+                        else relevance(candidate["source"] + " " + candidate["content"], technology)
+                    )
+                    if scope is None:
+                        continue
+                    relevant += 1
+                    # 이미 수집한 자료는 다시 담지 않되, 기준이 충족된 것으로 본다.
+                    if candidate["chunk_id"] in seen:
+                        continue
+                    seen.add(candidate["chunk_id"])
+                    rows.append({**candidate, "scope": scope, "criterion": criterion})
+                if relevant:
+                    break
+        sources[technology] = rows
+    return sources

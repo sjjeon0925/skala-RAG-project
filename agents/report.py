@@ -8,6 +8,15 @@ from evidence import all_evidence, collect_references, valid_ids
 from state import technology_names
 from workflow_logging import get_logger
 
+SOURCE_TIER_LABELS = {
+    1: "논문",
+    2: "표준·공식 기술문서",
+    3: "특허",
+    4: "시장·제품 공시",
+    5: "2차 자료",
+}
+
+
 SECTIONS = {
     "1.1": "데이터센터 환경의 KV Cache 문제",
     "1.2": "분석 목적 및 범위",
@@ -50,6 +59,73 @@ def _reference_text(index, ref):
     return f"{index}. {author} ({date}). {ref['source']}. {publication}, {ref['source_url']}"
 
 
+def synthesis_fallback(state):
+    """Synthesis가 검증에서 탈락했을 때 5장을 채울 재료.
+
+    새 내용을 만들지 않고, 이미 검증된 4장 finding과 conflicts만 재조합한다.
+    """
+    findings = [
+        finding
+        for perspective in PERSPECTIVES
+        for finding in state[f"{perspective}_analysis"].get("findings", [])
+    ]
+    by_criterion = {}
+    for finding in findings:
+        by_criterion.setdefault(finding["criterion"], []).append(finding)
+    common = [
+        f"- 두 기술 모두 {criterion} 항목에서 근거가 확인되었다: "
+        + " / ".join(f"{x['technology']} {x['claim']}" for x in rows)
+        for criterion, rows in by_criterion.items()
+        if len({x["technology"] for x in rows}) > 1
+    ]
+    tradeoffs = [
+        "- " + conflict["description"] + " " + conflict.get("implication", "")
+        for conflict in state["conflicts"]
+    ]
+    summary_line = (
+        "- 확인된 근거 범위에서는 두 기술의 우열을 판정할 수 없으며, "
+        f"미확인 항목 {len(state['missing_evidence'])}건이 남아 있다. "
+        "아래 관점별 결과와 상충 내용을 함께 고려해야 한다."
+    )
+    conclusion = [summary_line] if findings else []
+    return {"5.1": common, "5.3": tradeoffs, "5.4": conclusion}
+
+
+def trl_levels(state, technology):
+    """한 기술에 대해 기준별로 판정된 TRL 값 집합."""
+    return {
+        finding["trl_level"]
+        for finding in state["trl_analysis"].get("findings", [])
+        if finding["technology"] == technology and finding.get("trl_level") is not None
+    }
+
+
+def trl_summary(state, technologies):
+    """기준별 TRL 판정이 갈리면 단일 값으로 확정하지 않고 범위로 제시한다."""
+    lines = []
+    for technology in technologies:
+        levels = {}
+        for finding in state["trl_analysis"].get("findings", []):
+            if finding["technology"] == technology and finding.get("trl_level") is not None:
+                levels.setdefault(finding["trl_level"], []).append(finding.get("criterion", "기준 미상"))
+        if not levels:
+            lines.append(f"- {technology}: 공개 자료로 TRL을 추정할 근거가 부족하다.")
+            continue
+        low, high = min(levels), max(levels)
+        if low == high:
+            lines.append(f"- {technology}: 추정 TRL {low}")
+            continue
+        basis = ", ".join(
+            f"TRL {level}({', '.join(dict.fromkeys(criteria))})" for level, criteria in sorted(levels.items())
+        )
+        lines.append(
+            f"- {technology}: 추정 TRL {low}~{high}. 평가 기준에 따라 판정이 갈렸다({basis}). "
+            "연구·프로토타입 수준 근거와 실환경에 가까운 실증 근거가 함께 확인되어 판단 경계에 있으므로 "
+            "단일 값으로 확정하지 않고 범위로 제시한다."
+        )
+    return lines
+
+
 def _render_report(state, draft, *, mode="live"):
     evidence = all_evidence(state)
     technologies = technology_names(state)
@@ -63,6 +139,7 @@ def _render_report(state, draft, *, mode="live"):
         return paragraph["text"].strip() + " ⟦CITE:" + "|".join(ids) + "⟧"
 
     supplemental = {section_id: [] for section_id in SECTIONS}
+    fallback = synthesis_fallback(state)
     for index, selection in enumerate(state["technologies"], 1):
         supplemental[f"2.{index}"].append(
             f"- {selection['name']} ({selection['category']}): {selection['key_approach']} - "
@@ -74,7 +151,13 @@ def _render_report(state, draft, *, mode="live"):
         for finding in analysis.get("findings", []):
             label = f"[{finding['kind']}] {finding['technology']}: {finding['claim']}"
             if finding.get("trl_level") is not None:
-                label += f" (공개 정보 기반 추정 TRL {finding['trl_level']})"
+                spread = trl_levels(state, finding["technology"])
+                label += (
+                    f" (공개 정보 기반 추정 TRL {min(spread)}~{max(spread)} 중 "
+                    f"{finding.get('criterion', '해당 기준')} 판정 {finding['trl_level']})"
+                    if len(spread) > 1
+                    else f" (공개 정보 기반 추정 TRL {finding['trl_level']})"
+                )
             if perspective == "stakeholder":
                 speakers = []
                 for eid in finding["evidence_ids"]:
@@ -168,7 +251,20 @@ def _render_report(state, draft, *, mode="live"):
                 0, "비교 기술은 설계서에서 사람이 선정했으며 자동 기술 선정 Agent는 사용하지 않았다."
             )
         elif section_id == "4.1":
-            paragraphs.append("TRL은 공개 정보 기반 추정이며 공식 인증값이 아니다.")
+            paragraphs = trl_summary(state, technologies) + paragraphs
+            paragraphs.append(
+                "TRL은 공개 정보 기반 추정이며 공식 인증값이 아니다. "
+                "아래 개별 항목의 TRL은 각 평가 기준에서 판정한 값이며, "
+                "기준 간 차이가 있는 경우 위의 통합 범위를 기준으로 해석한다."
+            )
+        elif section_id == "4.2":
+            # 대상 기술 자체의 채택 자료가 아닌 상위 시장 자료임을 먼저 밝힌다.
+            paragraphs.insert(
+                0,
+                "아래 시장성 근거는 대상 기술 자체의 채택·매출 자료가 아니라 "
+                "CXL·KV Cache 상위 시장과 생태계 자료이다. ITME와 CXL-PIM 개별 기술의 "
+                "제품화·실제 도입 근거는 공개 자료에서 확인되지 않았다.",
+            )
         elif section_id == "6.1":
             for gap in state["missing_evidence"]:
                 paragraphs.append(
@@ -189,6 +285,13 @@ def _render_report(state, draft, *, mode="live"):
                 "인용문 일치는 자동 확인했으나 주장과 인용의 의미적 일치에는 사람의 검토가 필요하다."
             )
         paragraphs.extend(supplemental[section_id])
+        if not paragraphs and fallback.get(section_id):
+            # Synthesis가 탈락한 절은 이미 검증된 finding·conflict로 재조합한다.
+            get_logger().info("SECTION_FALLBACK | section=%s | items=%d", section_id, len(fallback[section_id]))
+            paragraphs = [
+                "아래 내용은 4장의 검증된 평가 결과를 재구성한 것이다.",
+                *fallback[section_id],
+            ]
         lines.extend(paragraphs or ["검증된 자료로 작성할 내용이 부족합니다."])
         lines.append("")
 
@@ -196,7 +299,11 @@ def _render_report(state, draft, *, mode="live"):
     by_eid = {eid: index for index, ref in enumerate(refs, 1) for eid in ref["evidence_ids"]}
     lines.extend(["", "## REFERENCE", ""])
     for index, ref in enumerate(refs, 1):
-        lines.append(_reference_text(index, ref))
+        tier = min(
+            (evidence[eid].get("source_tier", 5) for eid in ref["evidence_ids"] if eid in evidence),
+            default=5,
+        )
+        lines.append(_reference_text(index, ref) + f" [출처 등급 {tier}: {SOURCE_TIER_LABELS[tier]}]")
         lines.append("   - 근거 ID: " + ", ".join(ref["evidence_ids"]))
 
     def replace_citation(match):
@@ -231,7 +338,12 @@ def contents_writer(state, services):
         "sections": SECTIONS,
         "technologies": state["technologies"],
         "domain": state["domain"],
-        "evidence": all_evidence(state),
+        # 원문 청크와 인용문은 넘기지 않는다. 검증된 결과만 전달해 재작성을 막는다.
+        "evidence": {
+            eid: {k: v for k, v in item.items() if k in ("evidence_id", "technology", "perspective",
+                                                         "item", "claim", "kind", "source", "page", "scope")}
+            for eid, item in all_evidence(state).items()
+        },
         "synthesis": state["synthesis"],
         "analyses": {p: state[f"{p}_analysis"] for p in PERSPECTIVES},
         "conflicts": state["conflicts"],

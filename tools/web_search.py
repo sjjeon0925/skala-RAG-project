@@ -1,11 +1,13 @@
 """수업 코드의 TavilySearch와 근거 State 사이의 최소 어댑터."""
 
 import hashlib
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 from langchain_teddynote.tools.tavily import TavilySearch
 
-from workflow_logging import log_operation
+from config import TECH_PROFILES, source_tier
+from workflow_logging import get_logger, log_operation
 
 
 def canonical_url(url: str) -> str:
@@ -13,6 +15,27 @@ def canonical_url(url: str) -> str:
     if parts.scheme not in ("https", "http") or not parts.netloc or parts.username:
         return ""
     return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path, parts.query, ""))
+
+
+def relevance(text: str, technology: str) -> str | None:
+    """근거 범위를 direct / ecosystem / comparison 으로 나눈다.
+
+    고유 명칭이 있으면 대상 기술 자체(direct), 약어나 일반 CXL/PIM 용어만
+    있으면 상위 시장(ecosystem), 별도 시스템이면 comparison. 어느 쪽도
+    아니면 None을 돌려 근거로 쓰지 않는다.
+    """
+    profile = TECH_PROFILES.get(technology)
+    if profile is None:
+        return "comparison"
+    if re.search(r"\bCENT\b|PIM Is All You Need", text, re.IGNORECASE):
+        return "comparison"
+    if any(name.lower() in text.lower() for name in profile["distinctive"]):
+        return "direct"
+    if any(name.lower() in text.lower() for name in profile["ambiguous"]) or re.search(
+        r"\b(CXL|PIM|PNM|KV[- ]?cache)\b", text, re.IGNORECASE
+    ):
+        return "ecosystem"
+    return None
 
 
 def create_web_search():
@@ -43,10 +66,13 @@ def normalize_web_results(results: list[dict]) -> list[dict]:
                 "author": row.get("author") or "",
                 "source_type": "web",
                 "site_name": urlsplit(url).netloc,
+                "source_tier": source_tier(url),
                 "venue": "",
                 "identifier": "",
             }
         )
+    # 1.논문 > 2.공식 문서 > 3.특허 > 4.시장 자료 > 5.기타 순으로 사용한다.
+    sources.sort(key=lambda item: item["source_tier"])
     return sources
 
 
@@ -59,7 +85,13 @@ def web_search(tool, query: str, *, max_results: int | None = None) -> list[dict
         max_results=max_results,
         format_output=False,
     )
-    return normalize_web_results(results)
+    sources = normalize_web_results(results)
+    get_logger().info(
+        "WEB_RESULTS | sources=%d | tiers=%s",
+        len(sources),
+        sorted(x["source_tier"] for x in sources),
+    )
+    return sources
 
 
 # 기존 프로젝트 호출부와의 호환성을 위한 별칭이다.

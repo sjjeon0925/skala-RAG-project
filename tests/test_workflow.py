@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app import main
-from config import PERSPECTIVES
+from config import EVALUATION_CRITERIA, PERSPECTIVES
 from demo import DemoLLM, demo_services
 from evidence import fan_in
 from graph import build_graph
@@ -50,7 +50,10 @@ class WorkflowTests(unittest.TestCase):
             "### 4.4 데이터센터·클라우드 적용성",
         ):
             self.assertIn(heading, state["final_report"])
-        self.assertEqual(len(services.web.calls), 6 + 8)
+        # 기술 × 평가 기준 단위 검색: (TRL 3 + 시장 5 + 이해관계자 3) × 기술 2 = 22회.
+        # 결과가 있으면 대체 질의를 쓰지 않는다. 여기에 반대 근거 검색 8회가 더해진다.
+        web_criteria = sum(len(EVALUATION_CRITERIA[p]) for p in ("trl", "market", "stakeholder"))
+        self.assertEqual(len(services.web.calls), web_criteria * 2 + 8)
         self.assertTrue(all(x["search_count"] == 1 for x in state["counter_evidence"].values()))
 
     def test_retry_success_clears_first_gaps(self):
