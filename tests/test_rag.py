@@ -76,10 +76,13 @@ class RagTests(unittest.TestCase):
             Settings(), manifest=manifest, index_dir=root / "index", chunk_tokens=20, overlap_tokens=3
         )
 
-    def test_real_corpus_is_44_pages_and_preserves_metadata(self):
+    def test_real_corpus_is_116_pages_and_preserves_metadata(self):
         documents = load_documents()
-        self.assertEqual(len(documents), 44)
-        self.assertEqual({x["technology"] for x in documents}, {"ITME", "CXL-PIM", "InfiniGen"})
+        self.assertEqual(len(documents), 116)
+        self.assertEqual(
+            {x["technology"] for x in documents},
+            {"ITME", "CXL-PIM", "InfiniGen", "PagedAttention", "Mooncake", "CENT", "CacheGen"},
+        )
         self.assertTrue(all(x["page"] > 0 and x["source_url"] for x in documents))
 
     def test_page_limit_and_missing_input(self):
@@ -123,6 +126,23 @@ class RagTests(unittest.TestCase):
         chunks = split_documents([source], tokenizer=WordTokenizer())
         self.assertEqual(chunks[0]["content"], "intro content")
         self.assertTrue(chunks[1]["content"].startswith("2 Evaluation"))
+
+    def test_table_page_keeps_full_parent_while_embedding_children_are_bounded(self):
+        source = {
+            "technology": "ITME",
+            "document_id": "ITME",
+            "source": "ITME",
+            "source_url": "https://example.test",
+            "role": "core",
+            "page": 1,
+            "protected_table": True,
+            "content": " ".join(f"cell{i}" for i in range(55)),
+        }
+        settings = replace(Settings(), chunk_tokens=20, overlap_tokens=5)
+        chunks = split_documents([source], tokenizer=WordTokenizer(), settings=settings)
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(chunk["content"] == source["content"] for chunk in chunks))
+        self.assertTrue(all(len(chunk["embedding_content"].split()) <= 20 for chunk in chunks))
 
     def test_index_cache_hit_source_change_and_corruption(self):
         with tempfile.TemporaryDirectory() as directory:

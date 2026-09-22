@@ -1,36 +1,18 @@
 """보고서 Agent: State 자료로 작성하고 실제 인용된 참고문헌만 렌더링."""
 
 from config import PERSPECTIVES
-from evidence import all_evidence, collect_references, valid_ids
+from evidence import all_evidence, collect_references, numeric_supported, valid_ids
 from schemas import ReportDraft
 from workflow_logging import get_logger
 
 SECTIONS = {
-    "1.1": "데이터센터 환경의 KV Cache 문제",
-    "1.2": "분석 목적 및 범위",
-    "2.1": "ITME",
-    "2.2": "CXL-PIM",
-    "2.3": "기술 선정 및 비교 이유",
-    "3.1": "ITME 핵심 구조와 특성",
-    "3.2": "CXL-PIM 핵심 구조와 특성",
-    "3.3": "두 기술의 구조적 차이",
+    "1": "분석 배경 및 문제 정의",
+    "2": "평가 대상 기술 선정",
+    "3": "기술 개요",
     "4.1": "기술 성숙도",
     "4.2": "시장성",
     "4.3": "이해관계자",
     "4.4": "데이터센터 클라우드 적용성",
-    "5.1": "공통적으로 확인된 사항",
-    "5.2": "관점에 따라 평가가 엇갈리는 지점",
-    "5.3": "주요 Trade-off",
-    "5.4": "종합 의견",
-    "6.1": "공개 정보 기반 분석의 한계",
-    "6.2": "서로 다른 실험 환경에 따른 직접 비교 한계",
-    "6.3": "확증편향 방지 및 근거 검증 방법",
-}
-CHAPTERS = {
-    "1": "분석 배경 및 문제 정의",
-    "2": "평가 대상 기술 선정",
-    "3": "기술 개요",
-    "4": "다관점 평가",
     "5": "관점 간 종합 및 시사점",
     "6": "분석 한계 및 신뢰성 확보",
 }
@@ -38,19 +20,34 @@ CHAPTERS = {
 
 def render_report(state, draft, *, mode="live"):
     evidence = all_evidence(state)
-    refs = collect_references(evidence)
-    by_eid = {eid: index for index, ref in enumerate(refs, 1) for eid in ref["evidence_ids"]}
     used = set()
 
     def cited(paragraph):
         if not paragraph["text"].strip() or not valid_ids(paragraph["evidence_ids"], evidence):
             return ""
+        rows = [evidence[eid] for eid in paragraph["evidence_ids"]]
+        validation_text = paragraph["text"]
+        if "추정 TRL" in validation_text:
+            import re
+
+            validation_text = re.sub(r"추정 TRL\s*[1-9]", "추정 TRL", validation_text)
+        if not numeric_supported(validation_text, rows):
+            raise ValueError("보고서 수치 또는 단위가 인용 근거와 일치하지 않음")
         used.update(paragraph["evidence_ids"])
+        scope = ""
+        if any(row.get("scope") == "comparison" for row in rows):
+            scope = "[보조 문서 비교 맥락] "
+        elif any(row.get("scope") == "ecosystem" for row in rows):
+            scope = "[상위 시장·생태계] "
+        conditions = list(
+            dict.fromkeys(row["experimental_condition"] for row in rows if row.get("numeric"))
+        )
+        condition_prefix = "조건: " + " / ".join(conditions) + ". " if conditions else ""
         markers = []
         for eid in dict.fromkeys(paragraph["evidence_ids"]):
             page = evidence[eid].get("page")
-            markers.append(str(by_eid[eid]) + (f", p.{page}" if page is not None else ""))
-        return paragraph["text"].strip() + " [" + "; ".join(dict.fromkeys(markers)) + "]"
+            markers.append(eid + (f", p.{page}" if page is not None else ""))
+        return scope + condition_prefix + paragraph["text"].strip() + " [" + "; ".join(markers) + "]"
 
     lines = ["# ITME와 CXL-PIM 데이터센터 적용성 비교 평가", ""]
     if mode != "live":
@@ -72,34 +69,31 @@ def render_report(state, draft, *, mode="live"):
         if section["section_id"] in SECTIONS:
             content.setdefault(section["section_id"], []).extend(section["paragraphs"])
     for section_id, title in SECTIONS.items():
-        if section_id.endswith(".1"):
-            chapter = section_id.split(".")[0]
-            lines.extend([f"## {chapter}. {CHAPTERS[chapter]}", ""])
-        lines.extend([f"### {section_id} {title}", ""])
-        paragraphs = [cited(p) for p in content.get(section_id, [])]
+        heading = "###" if section_id.startswith("4.") else "##"
+        lines.extend([f"{heading} {section_id}. {title}", ""])
+        source_paragraphs = [] if section_id == "6" else content.get(section_id, [])
+        paragraphs = [cited(p) for p in source_paragraphs]
         paragraphs = [p for p in paragraphs if p]
-        if section_id == "1.2":
+        if section_id == "1":
             paragraphs.insert(
                 0, f"분석 범위는 {state['domain']}에서 ITME와 CXL-PIM의 KV Cache 관리 방식이다."
             )
-        elif section_id == "2.3":
+        elif section_id == "2":
             paragraphs.insert(
                 0, "비교 기술은 설계서에서 사람이 선정했으며 자동 기술 선정 Agent는 사용하지 않았다."
             )
         elif section_id == "4.1":
             paragraphs.append("TRL은 공개 정보 기반 추정이며 공식 인증값이 아니다.")
-        elif section_id == "6.1":
+        elif section_id == "6":
             for gap in state["missing_evidence"]:
                 paragraphs.append(
                     f"- 미확인: {gap['technology']} / {gap.get('perspective', 'technical')} / "
                     f"{gap['item']} ({gap['reason']})"
                 )
-        elif section_id == "6.2":
             paragraphs.append(
                 "GPU, 모델, Context Length, Batch, Baseline이 다르거나 확인되지 않은 "
                 "수치는 동일 조건의 벤치마크로 해석하지 않는다."
             )
-        elif section_id == "6.3":
             found = sum(x["status"] == "found" for x in state["counter_evidence"].values())
             paragraphs.append(
                 f"기술 재검색 {state['retry_count']}회, 주요 주장별 반대 근거 검색 "
@@ -119,7 +113,9 @@ def render_report(state, draft, *, mode="live"):
                 label += f" (추정 TRL {finding['trl_level']})"
             text = cited({"text": label, "evidence_ids": finding["evidence_ids"]})
             if text:
-                lines.extend(["- " + text, "  - 한계: " + (finding["limitation"] or "추가 검토 필요")])
+                lines.append("- " + text)
+                if finding["limitation"]:
+                    lines.append("  - 한계: " + finding["limitation"])
         for limitation in analysis.get("limitations", []):
             lines.append("- 평가 한계: " + limitation)
     for counter in state["counter_evidence"].values():
@@ -148,6 +144,7 @@ def render_report(state, draft, *, mode="live"):
             condition = item.get("condition_source", {})
             location = f" (조건 출처 p.{condition['page']})" if condition.get("page") else ""
             lines.append(f"- 수치 근거 {eid}: 실험 조건 — {item['experimental_condition']}{location}")
+    refs = collect_references({eid: evidence[eid] for eid in used})
     lines.extend(["", "## REFERENCE", ""])
     for index, ref in enumerate(refs, 1):
         ids = [eid for eid in ref["evidence_ids"] if eid in used]
@@ -155,7 +152,9 @@ def render_report(state, draft, *, mode="live"):
             continue
         author = ref["author"] or "저자 정보 미확인"
         date = str(ref["year"] or ref["published_date"] or "발행일 미확인")
-        lines.append(f"{index}. {author} ({date}). {ref['source']}. {ref['source_url']}")
+        venue = ref["venue"] or (f"arXiv:{ref['arxiv_id']}" if ref["arxiv_id"] else ref["site_name"])
+        bibliography = ". ".join(x for x in (f"{author} ({date})", ref["source"], venue) if x)
+        lines.append(f"{index}. {bibliography}. {ref['source_url']}")
         lines.append("   - 근거 ID: " + ", ".join(ids))
     get_logger().info(
         "REPORT_CITATIONS | cited_evidence=%d | reference_sources=%d",
@@ -166,12 +165,26 @@ def render_report(state, draft, *, mode="live"):
 
 
 def report_agent(state, services):
+    counter_ids = {
+        item["evidence"]["evidence_id"]
+        for item in state["counter_evidence"].values()
+        if item.get("status") == "found"
+    }
+    synthesis_ids = {
+        identifier
+        for key in ("summary", "commonalities", "differences", "tradeoffs", "conclusion")
+        for row in state["synthesis"].get(key, [])
+        for identifier in row["evidence_ids"]
+    }
+    if not counter_ids.issubset(synthesis_ids):
+        raise ValueError("채택한 반대 근거가 synthesis에 반영되지 않음")
     draft = services.llm.generate(
         "report",
         "State의 조사/평가/종합 결과를 제공한 목차의 section_id에 맞춰 전달하는 보고서 작성. "
         "새로운 사실이나 평가를 추가하지 말 것. paragraphs는 text 및 evidence_ids. "
         "자료가 없는 문단은 생략. Fact/Opinion/Inference 구분과 한계를 유지. "
-        "SUMMARY는 synthesis.summary를 그대로 요약한다. 참고문헌 목록/URL은 생성하지 말 것.",
+        "SUMMARY는 synthesis.summary를 그대로 요약한다. 6장은 비워 두며 부족 목록은 코드가 한 번만 추가한다. "
+        "참고문헌 목록/URL은 생성하지 말 것.",
         {
             "sections": SECTIONS,
             "technologies": state["technologies"],
@@ -186,4 +199,13 @@ def report_agent(state, services):
         },
         ReportDraft,
     )
-    return {"final_report": render_report(state, draft.model_dump(), mode=services.mode)}
+    report = render_report(state, draft.model_dump(), mode=services.mode)
+    cited = {
+        identifier
+        for identifier in all_evidence(state)
+        if f"[{identifier}" in report
+    }
+    references = collect_references(
+        {identifier: all_evidence(state)[identifier] for identifier in cited}
+    )
+    return {"final_report": report, "references": references}

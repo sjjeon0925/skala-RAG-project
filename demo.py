@@ -1,7 +1,7 @@
 """API/모델 다운로드 없는 실행 흐름 검증용 가상 공급자. 실제 기술 사실이 아니다."""
 
 from config import Settings
-from schemas import Conflicts, CounterResult, Evaluation, Extraction, ReportDraft, Synthesis
+from schemas import Conflicts, CounterResult, Evaluation, Extraction, Grounding, ReportDraft, Synthesis
 from services import Services
 
 
@@ -49,6 +49,13 @@ class DemoLLM:
         self.technical_calls = {}
 
     def generate(self, task, instructions, payload, schema, *, judge=False):
+        if schema is Grounding:
+            return Grounding(
+                verdicts=[
+                    {"statement_id": row["statement_id"], "supported": True, "reason": "DEMO"}
+                    for row in payload["statements"]
+                ]
+            )
         if schema is Extraction:
             technology = payload["technology"]
             if task == "extract:technical":
@@ -70,6 +77,9 @@ class DemoLLM:
                         "numeric": False,
                         "experimental_condition": "",
                         "condition_chunk_id": "",
+                        "speaker": "",
+                        "organization": "",
+                        "published_date": "",
                     }
                     for item in payload["items"]
                 ]

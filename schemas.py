@@ -18,6 +18,9 @@ class ExtractedFact(StrictModel):
     numeric: bool
     experimental_condition: str
     condition_chunk_id: str
+    speaker: str
+    organization: str
+    published_date: str
 
 
 class Extraction(StrictModel):
@@ -78,3 +81,13 @@ class ReportSection(StrictModel):
 class ReportDraft(StrictModel):
     summary: list[CitedText]
     sections: list[ReportSection]
+
+
+class GroundingVerdict(StrictModel):
+    statement_id: str
+    supported: bool
+    reason: str
+
+
+class Grounding(StrictModel):
+    verdicts: list[GroundingVerdict]

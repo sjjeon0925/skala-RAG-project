@@ -3,6 +3,7 @@
 from config import PERSPECTIVES
 from evidence import all_evidence, valid_ids
 from schemas import Synthesis
+from tools.grounding import statement, verify_statements
 
 
 def synthesis_agent(state, services):
@@ -23,5 +24,24 @@ def synthesis_agent(state, services):
     ).model_dump()
     for key in ("summary", "commonalities", "differences", "tradeoffs", "conclusion"):
         result[key] = [x for x in result[key] if x["text"].strip() and valid_ids(x["evidence_ids"], evidence)]
+        if result[key]:
+            accepted = verify_statements(
+                services,
+                [
+                    statement(str(index), row["text"], [evidence[i] for i in row["evidence_ids"]])
+                    for index, row in enumerate(result[key])
+                ],
+            )
+            result[key] = [row for index, row in enumerate(result[key]) if str(index) in accepted]
+    reflected = {identifier for rows in result.values() if isinstance(rows, list) for row in rows
+                 if isinstance(row, dict) for identifier in row.get("evidence_ids", [])}
+    for counter in state["counter_evidence"].values():
+        if counter.get("status") != "found":
+            continue
+        identifier = counter["evidence"]["evidence_id"]
+        if identifier not in reflected:
+            result["tradeoffs"].append(
+                {"text": counter["counter_claim"], "evidence_ids": [identifier]}
+            )
     result["missing_evidence"] = state["missing_evidence"]
     return {"synthesis": result}

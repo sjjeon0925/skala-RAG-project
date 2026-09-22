@@ -8,5 +8,5 @@ def stakeholder_agent(state, services):
         state,
         services,
         "stakeholder",
-        web_sources(state, services, "developer operator vendor industry compatibility concerns"),
+        web_sources(state, services, "stakeholder"),
     )

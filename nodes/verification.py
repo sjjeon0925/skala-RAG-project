@@ -5,6 +5,7 @@ import hashlib
 from config import PERSPECTIVES
 from evidence import all_evidence, quote_exists, valid_ids
 from schemas import Conflicts, CounterResult
+from tools.grounding import statement, verify_statements
 from workflow_logging import get_logger
 
 
@@ -74,16 +75,25 @@ def counter_evidence_node(state, services):
                     "kind": "Opinion",
                     "numeric": False,
                     "experimental_condition": "",
+                    "condition_source": {},
+                    "scope": "direct",
                 }
-                row.update(
-                    {
-                        "status": "found",
-                        "counter_claim": result.counter_claim,
-                        "source": source["source"],
-                        "page_or_url": source["source_url"],
-                        "evidence": counter,
-                    }
+                supported = verify_statements(
+                    services,
+                    [statement(identifier, result.counter_claim, [counter], finding["technology"])],
                 )
+                if identifier in supported:
+                    row.update(
+                        {
+                            "status": "found",
+                            "counter_claim": result.counter_claim,
+                            "source": source["source"],
+                            "page_or_url": source["source_url"],
+                            "evidence": counter,
+                        }
+                    )
+                else:
+                    row["validation_note"] = "주장-원문 의미 검증에 실패하여 채택하지 않음"
             elif result and result.found:
                 row["validation_note"] = "후보의 출처/직접 인용 검증에 실패하여 반대 근거로 채택하지 않음"
             counters[identifier] = row
@@ -107,6 +117,19 @@ def conflict_node(state, services):
         judge=True,
     )
     conflicts = [x.model_dump() for x in response.conflicts if valid_ids(x.evidence_ids, evidence)]
+    if conflicts:
+        accepted = verify_statements(
+            services,
+            [
+                statement(
+                    str(index),
+                    item["description"] + " " + item["implication"],
+                    [evidence[i] for i in item["evidence_ids"]],
+                )
+                for index, item in enumerate(conflicts)
+            ],
+        )
+        conflicts = [item for index, item in enumerate(conflicts) if str(index) in accepted]
     numeric = [e for e in state["technical_evidence"].values() if e.get("numeric")]
     if len({e["technology"] for e in numeric}) > 1:
         # 구조화되지 않은 조건 문자열만으로 동등한 benchmark임을 인정하지 않는다.

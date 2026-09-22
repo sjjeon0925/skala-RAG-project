@@ -1,0 +1,822 @@
+[
+  {
+    "model": "intfloat/multilingual-e5-small",
+    "build_seconds": 42.93746020799881,
+    "chunks": 710,
+    "hit_rate_at_5": 0.8,
+    "mrr_at_5": 0.5058333333333334,
+    "mean_query_seconds": 0.011941719000969898,
+    "cases": [
+      {
+        "technology": "ITME",
+        "criterion": "원리·배치",
+        "query": "ITME KV Cache와 가중치 저장 위치 및 memory tier placement",
+        "expected_pages": [
+          2
+        ],
+        "anchor": "Table1 summarizes",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          2,
+          2,
+          2,
+          2,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.016653833001328167
+      },
+      {
+        "technology": "ITME",
+        "criterion": "데이터 이동",
+        "query": "ITME hardware prefetch commands MSHR DMA operational overhead",
+        "expected_pages": [
+          6
+        ],
+        "anchor": "Control Logic and Operational Overhead",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          6,
+          8,
+          7,
+          3,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.012786208004399668
+      },
+      {
+        "technology": "ITME",
+        "criterion": "실험 조건",
+        "query": "ITME CMM PCIe NVMe SSD hardware evaluation setup",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "CMM",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          8,
+          11,
+          2,
+          1,
+          10
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.010889167002460454
+      },
+      {
+        "technology": "ITME",
+        "criterion": "성능·Baseline",
+        "query": "ITME vLLM CPU Offloading baselines benchmarks evaluation",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Baselines and Benchmarks",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          9,
+          9,
+          9,
+          9,
+          10
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.01199691700458061
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "원리·확장",
+        "query": "CXL-PIM rack scale memory expansion CXL-PNM system architecture",
+        "expected_pages": [
+          3
+        ],
+        "anchor": "CXL-Enabled Memory Expansion",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          4,
+          3,
+          2,
+          11,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.010440083999128547
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "Attention 실행",
+        "query": "CXL-PIM PNM VPU attention computation top K token page selection",
+        "expected_pages": [
+          5
+        ],
+        "anchor": "attention computation",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          6,
+          5,
+          5,
+          2,
+          7
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.009122374998696614
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "실험 조건",
+        "query": "CXL-PIM CXL-PNM platform hardware architecture operating parameters",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "operating parameters",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          5,
+          11,
+          2,
+          8,
+          4
+        ],
+        "hit_at_5": true,
+        "rr": 0.25,
+        "seconds": 0.011826666996057611
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "성능",
+        "query": "CXL-PIM server level throughput comparison energy token Llama3.1 8B 70B",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Server-Level Evaluation",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          9,
+          10,
+          2,
+          11,
+          1
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.010354792000725865
+      },
+      {
+        "technology": "ITME",
+        "criterion": "한계",
+        "query": "ITME FPGA prototype cache misses hardware bandwidth limitations",
+        "expected_pages": [
+          11
+        ],
+        "anchor": "cache misses",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          10,
+          11,
+          11,
+          3,
+          3
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.01224950000323588
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "한계",
+        "query": "CXL-PIM PNM attention slower lower memory bandwidth GPU throughput energy tradeoff",
+        "expected_pages": [
+          10
+        ],
+        "anchor": "attention itself can be slower",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          10,
+          10,
+          2,
+          10,
+          6
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.010130458998901304
+      },
+      {
+        "technology": "ITME",
+        "criterion": "원리·배치",
+        "query": "ITME 데이터 종류별 계층 메모리 배치와 저장 위치",
+        "expected_pages": [
+          2
+        ],
+        "anchor": "Table1 summarizes",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          3,
+          11,
+          6
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.01358891700510867
+      },
+      {
+        "technology": "ITME",
+        "criterion": "데이터 이동",
+        "query": "ITME 하드웨어 사전 가져오기와 동작 오버헤드",
+        "expected_pages": [
+          6
+        ],
+        "anchor": "Control Logic and Operational Overhead",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          3,
+          9,
+          11
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.011699667003995273
+      },
+      {
+        "technology": "ITME",
+        "criterion": "실험 조건",
+        "query": "ITME 실험 하드웨어와 메모리 장치 구성",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "CMM",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          11,
+          3,
+          11
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.012722667001071386
+      },
+      {
+        "technology": "ITME",
+        "criterion": "성능·Baseline",
+        "query": "ITME 성능 평가에서 사용한 비교 기준선",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Baselines and Benchmarks",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          9,
+          11,
+          10
+        ],
+        "hit_at_5": true,
+        "rr": 0.3333333333333333,
+        "seconds": 0.01209220899909269
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "원리·확장",
+        "query": "CXL-PIM 서버 랙 단위 메모리 확장 구조",
+        "expected_pages": [
+          3
+        ],
+        "anchor": "CXL-Enabled Memory Expansion",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          11,
+          3,
+          2,
+          8
+        ],
+        "hit_at_5": true,
+        "rr": 0.3333333333333333,
+        "seconds": 0.012805124999431428
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "Attention 실행",
+        "query": "CXL-PIM 어텐션 연산 실행 위치와 토큰 페이지 선택",
+        "expected_pages": [
+          5
+        ],
+        "anchor": "attention computation",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          1,
+          8,
+          12,
+          1
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.011108042002888396
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "실험 조건",
+        "query": "CXL-PIM 실험 플랫폼의 하드웨어 사양과 동작 조건",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "operating parameters",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          8,
+          6,
+          8,
+          12
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.011701124996761791
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "성능",
+        "query": "CXL-PIM 서버 수준의 처리량과 토큰당 에너지 성능",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Server-Level Evaluation",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          9,
+          2,
+          1,
+          12
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.00975379200099269
+      },
+      {
+        "technology": "ITME",
+        "criterion": "한계",
+        "query": "ITME 하드웨어 프로토타입의 대역폭 한계",
+        "expected_pages": [
+          11
+        ],
+        "anchor": "cache misses",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          11,
+          9,
+          3
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.013344792001589667
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "한계",
+        "query": "CXL-PIM 어텐션 성능과 에너지 소비의 한계",
+        "expected_pages": [
+          10
+        ],
+        "anchor": "attention itself can be slower",
+        "language": "ko",
+        "retrieved_pages": [
+          12,
+          11,
+          11,
+          1,
+          10
+        ],
+        "hit_at_5": true,
+        "rr": 0.2,
+        "seconds": 0.01356804199895123
+      }
+    ]
+  },
+  {
+    "model": "intfloat/multilingual-e5-base",
+    "build_seconds": 73.1158273750043,
+    "chunks": 710,
+    "hit_rate_at_5": 0.75,
+    "mrr_at_5": 0.5266666666666666,
+    "mean_query_seconds": 0.026099431399416062,
+    "cases": [
+      {
+        "technology": "ITME",
+        "criterion": "원리·배치",
+        "query": "ITME KV Cache와 가중치 저장 위치 및 memory tier placement",
+        "expected_pages": [
+          2
+        ],
+        "anchor": "Table1 summarizes",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          7,
+          2,
+          2,
+          6,
+          2
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.024333499997737817
+      },
+      {
+        "technology": "ITME",
+        "criterion": "데이터 이동",
+        "query": "ITME hardware prefetch commands MSHR DMA operational overhead",
+        "expected_pages": [
+          6
+        ],
+        "anchor": "Control Logic and Operational Overhead",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          6,
+          8,
+          3,
+          7,
+          5
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.0282172500010347
+      },
+      {
+        "technology": "ITME",
+        "criterion": "실험 조건",
+        "query": "ITME CMM PCIe NVMe SSD hardware evaluation setup",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "CMM",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          8,
+          11,
+          1,
+          2,
+          10
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.026591333997203037
+      },
+      {
+        "technology": "ITME",
+        "criterion": "성능·Baseline",
+        "query": "ITME vLLM CPU Offloading baselines benchmarks evaluation",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Baselines and Benchmarks",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          9,
+          9,
+          10,
+          9,
+          9
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.029424958003801294
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "원리·확장",
+        "query": "CXL-PIM rack scale memory expansion CXL-PNM system architecture",
+        "expected_pages": [
+          3
+        ],
+        "anchor": "CXL-Enabled Memory Expansion",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          4,
+          3,
+          11,
+          2,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.023677249999309424
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "Attention 실행",
+        "query": "CXL-PIM PNM VPU attention computation top K token page selection",
+        "expected_pages": [
+          5
+        ],
+        "anchor": "attention computation",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          5,
+          6,
+          7,
+          5,
+          2
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.022751083997718524
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "실험 조건",
+        "query": "CXL-PIM CXL-PNM platform hardware architecture operating parameters",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "operating parameters",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          8,
+          5,
+          11,
+          2,
+          4
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.01946825000050012
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "성능",
+        "query": "CXL-PIM server level throughput comparison energy token Llama3.1 8B 70B",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Server-Level Evaluation",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          9,
+          9,
+          2,
+          9,
+          9
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.022378875000867993
+      },
+      {
+        "technology": "ITME",
+        "criterion": "한계",
+        "query": "ITME FPGA prototype cache misses hardware bandwidth limitations",
+        "expected_pages": [
+          11
+        ],
+        "anchor": "cache misses",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          10,
+          11,
+          11,
+          8,
+          4
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.024687500001164153
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "한계",
+        "query": "CXL-PIM PNM attention slower lower memory bandwidth GPU throughput energy tradeoff",
+        "expected_pages": [
+          10
+        ],
+        "anchor": "attention itself can be slower",
+        "language": "en_or_mixed",
+        "retrieved_pages": [
+          9,
+          10,
+          10,
+          2,
+          7
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.022203082997293677
+      },
+      {
+        "technology": "ITME",
+        "criterion": "원리·배치",
+        "query": "ITME 데이터 종류별 계층 메모리 배치와 저장 위치",
+        "expected_pages": [
+          2
+        ],
+        "anchor": "Table1 summarizes",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          3,
+          10,
+          6,
+          2
+        ],
+        "hit_at_5": true,
+        "rr": 0.2,
+        "seconds": 0.033314583997707814
+      },
+      {
+        "technology": "ITME",
+        "criterion": "데이터 이동",
+        "query": "ITME 하드웨어 사전 가져오기와 동작 오버헤드",
+        "expected_pages": [
+          6
+        ],
+        "anchor": "Control Logic and Operational Overhead",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          10,
+          3,
+          3,
+          11
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.028443124996556435
+      },
+      {
+        "technology": "ITME",
+        "criterion": "실험 조건",
+        "query": "ITME 실험 하드웨어와 메모리 장치 구성",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "CMM",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          11,
+          3,
+          10,
+          1
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.02914191699528601
+      },
+      {
+        "technology": "ITME",
+        "criterion": "성능·Baseline",
+        "query": "ITME 성능 평가에서 사용한 비교 기준선",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Baselines and Benchmarks",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          10,
+          9,
+          9,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 0.3333333333333333,
+        "seconds": 0.029164083003706764
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "원리·확장",
+        "query": "CXL-PIM 서버 랙 단위 메모리 확장 구조",
+        "expected_pages": [
+          3
+        ],
+        "anchor": "CXL-Enabled Memory Expansion",
+        "language": "ko",
+        "retrieved_pages": [
+          4,
+          4,
+          12,
+          11,
+          8
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.024006916995858774
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "Attention 실행",
+        "query": "CXL-PIM 어텐션 연산 실행 위치와 토큰 페이지 선택",
+        "expected_pages": [
+          5
+        ],
+        "anchor": "attention computation",
+        "language": "ko",
+        "retrieved_pages": [
+          8,
+          3,
+          8,
+          8,
+          2
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.023726542000076734
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "실험 조건",
+        "query": "CXL-PIM 실험 플랫폼의 하드웨어 사양과 동작 조건",
+        "expected_pages": [
+          8
+        ],
+        "anchor": "operating parameters",
+        "language": "ko",
+        "retrieved_pages": [
+          8,
+          11,
+          8,
+          5,
+          8
+        ],
+        "hit_at_5": true,
+        "rr": 1.0,
+        "seconds": 0.02721820900478633
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "성능",
+        "query": "CXL-PIM 서버 수준의 처리량과 토큰당 에너지 성능",
+        "expected_pages": [
+          9
+        ],
+        "anchor": "Server-Level Evaluation",
+        "language": "ko",
+        "retrieved_pages": [
+          8,
+          9,
+          11,
+          11,
+          2
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.027746624997234903
+      },
+      {
+        "technology": "ITME",
+        "criterion": "한계",
+        "query": "ITME 하드웨어 프로토타입의 대역폭 한계",
+        "expected_pages": [
+          11
+        ],
+        "anchor": "cache misses",
+        "language": "ko",
+        "retrieved_pages": [
+          10,
+          11,
+          10,
+          1,
+          11
+        ],
+        "hit_at_5": true,
+        "rr": 0.5,
+        "seconds": 0.0285738329985179
+      },
+      {
+        "technology": "CXL-PIM",
+        "criterion": "한계",
+        "query": "CXL-PIM 어텐션 성능과 에너지 소비의 한계",
+        "expected_pages": [
+          10
+        ],
+        "anchor": "attention itself can be slower",
+        "language": "ko",
+        "retrieved_pages": [
+          11,
+          8,
+          1,
+          13,
+          8
+        ],
+        "hit_at_5": false,
+        "rr": 0,
+        "seconds": 0.026919709001958836
+      }
+    ]
+  }
+]

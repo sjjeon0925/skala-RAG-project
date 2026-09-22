@@ -25,10 +25,10 @@ class WorkflowTests(unittest.TestCase):
         )
         return result, services
 
-    def test_normal_full_run_preserves_15_fields(self):
+    def test_normal_full_run_preserves_16_fields(self):
         state, services = self.run_scenario()
         self.assertEqual(set(state), set(initial_state()))
-        self.assertEqual(len(state), 15)
+        self.assertEqual(len(state), 16)
         self.assertFalse(state["missing_evidence"])
         self.assertEqual(state["retry_count"], 0)
         for perspective in PERSPECTIVES:
@@ -36,7 +36,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(technologies, {"ITME", "CXL-PIM"})
         self.assertIn("DEMO / 테스트용", state["final_report"])
         self.assertIn("## REFERENCE", state["final_report"])
-        self.assertEqual(len(services.web.calls), 6 + 8)
+        self.assertEqual(len(services.web.calls), 26 + 8)
         self.assertTrue(all(x["search_count"] == 1 for x in state["counter_evidence"].values()))
 
     def test_retry_success_clears_first_gaps(self):
@@ -44,6 +44,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["retry_count"], 1)
         self.assertEqual(state["missing_evidence"], [])
         self.assertTrue(state["final_report"])
+        self.assertTrue(state["search_queries"])
+        self.assertTrue(all(query.startswith(("ITME ", "CXL-PIM ")) for query in state["search_queries"]))
 
     def test_retry_exhaustion_continues_and_preserves_gaps(self):
         state, _ = self.run_scenario("retry_exhausted")
@@ -56,30 +58,35 @@ class WorkflowTests(unittest.TestCase):
     def test_zero_retries(self):
         state, services = self.run_scenario("retry_exhausted", max_retries=0)
         self.assertEqual(state["retry_count"], 0)
-        self.assertEqual(services.llm.technical_calls, {"ITME": 1, "CXL-PIM": 1})
+        self.assertEqual(services.llm.technical_calls, {"ITME": 3, "CXL-PIM": 3})
 
     def test_second_gaps_do_not_restart_retrieval(self):
         state, services = self.run_scenario("second_missing")
         self.assertEqual(state["retry_count"], 0)
         self.assertTrue(any(x["stage"] == 2 and x["status"] == "recorded" for x in state["missing_evidence"]))
-        self.assertEqual(services.llm.technical_calls["ITME"], 1)
+        self.assertEqual(services.llm.technical_calls["ITME"], 3)
         self.assertTrue(state["final_report"])
 
-    def test_counter_found_is_cited_without_mutating_fanin_references(self):
+    def test_counter_found_is_cited_and_report_writes_references(self):
         state, _ = self.run_scenario("counter_found")
         self.assertTrue(all(x["status"] == "found" for x in state["counter_evidence"].values()))
         self.assertIn("DEMO 가상 제약 사항", state["final_report"])
-        self.assertTrue(
-            all(not e.startswith("counter-") for r in state["references"] for e in r["evidence_ids"])
-        )
+        self.assertTrue(any(e.startswith("counter-") for r in state["references"] for e in r["evidence_ids"]))
 
     def test_four_evaluators_really_parallel_and_join_once(self):
         barrier = threading.Barrier(4)
 
         class ParallelLLM(DemoLLM):
+            seen = set()
+            lock = threading.Lock()
+
             def generate(self, task, *args, **kwargs):
                 if task.startswith("evaluate:"):
-                    barrier.wait(timeout=5)
+                    with self.lock:
+                        first = task not in self.seen
+                        self.seen.add(task)
+                    if first:
+                        barrier.wait(timeout=5)
                 return super().generate(task, *args, **kwargs)
 
         services = demo_services()

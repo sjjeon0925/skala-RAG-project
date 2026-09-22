@@ -1,31 +1,29 @@
-"""도메인 평가: 기술 State + RAG. InfiniGen은 보조 맥락만 제공한다."""
+"""도메인 평가: 대상 기술 근거와 모든 보조 논문을 비교 맥락으로 사용한다."""
 
 from agents.common import evaluate
-from config import DOMAIN_CRITERIA
+from config import DOMAIN_CRITERIA, QUERY_TERMS
 
 
 def domain_agent(state, services):
-    sources = {}
+    sources = {technology: {} for technology in state["technologies"]}
     for technology in state["technologies"]:
-        chunks = {}
-        lists = [
-            services.retriever.search(
-                f"{technology} {state['domain']} {criterion}",
+        for criterion in DOMAIN_CRITERIA:
+            query = f"{technology} {state['domain']} {QUERY_TERMS[criterion]}"
+            direct = services.retriever.search(
+                query,
                 perspective="domain",
                 technology=technology,
                 role="core",
+                k=services.settings.top_k,
             )
-            for criterion in DOMAIN_CRITERIA
-        ]
-        for rank in range(services.settings.top_k):
-            for results in lists:
-                if rank < len(results):
-                    chunks.setdefault(results[rank]["chunk_id"], results[rank])
-        sources[technology] = list(chunks.values())[: services.settings.max_context_chunks]
-    # 보조 문서는 자기 기술명(InfiniGen)으로 추출하여 직접 비교 근거와 분리.
-    supporting = services.retriever.search(
-        "InfiniGen KV cache offloading data movement limitations", perspective="domain", role="supporting"
-    )
-    if supporting:
-        sources["InfiniGen"] = supporting
+            supporting = services.retriever.search(
+                query,
+                perspective="domain",
+                role="supporting",
+                k=services.settings.top_k,
+            )
+            sources[technology][criterion] = [
+                *({**row, "scope": "direct"} for row in direct),
+                *({**row, "scope": "comparison"} for row in supporting),
+            ][: services.settings.max_context_chunks]
     return evaluate(state, services, "domain", sources, state["technical_evidence"])

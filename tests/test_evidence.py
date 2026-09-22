@@ -3,13 +3,17 @@ from unittest.mock import Mock
 
 from agents.report import render_report
 from demo import demo_services
-from evidence import extract_evidence, valid_ids
+from evidence import extract_evidence, numeric_supported, valid_ids
 from graph import build_graph
 from schemas import Extraction
 from state import initial_state
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_numeric_unit_check_does_not_treat_lpddr5x_as_multiplier(self):
+        self.assertTrue(numeric_supported("LPDDR5X 메모리를 사용한다", [{"quote": "LPDDR5X memory"}]))
+        self.assertFalse(numeric_supported("처리량이 5x 향상된다", [{"quote": "LPDDR5X memory"}]))
+
     def test_web_same_quote_has_distinct_ids_for_each_technology(self):
         services = demo_services()
         chunks = services.web.search("test")
@@ -30,6 +34,9 @@ class EvidenceTests(unittest.TestCase):
             "numeric": True,
             "experimental_condition": "",
             "condition_chunk_id": "",
+            "speaker": "",
+            "organization": "",
+            "published_date": "",
         }
         for change in (
             {},
@@ -95,6 +102,9 @@ class EvidenceTests(unittest.TestCase):
                     "numeric": True,
                     "experimental_condition": conditions["content"],
                     "condition_chunk_id": "condition-page",
+                    "speaker": "",
+                    "organization": "",
+                    "published_date": "",
                 }
             ]
         )

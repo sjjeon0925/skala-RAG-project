@@ -21,12 +21,15 @@ def technical_agent(state, services):
         # 순위별 round-robin으로 여러 항목의 검색 결과가 문맥 한도를 공유한다.
         lists = [
             services.retriever.search(
-                rewrite_query(technology, item, state["retry_count"]),
+                query,
                 perspective="technical",
                 technology=technology,
                 role="core",
             )
-            for item in items
+            for query in (
+                [q for q in state["search_queries"] if q.startswith(technology + " ")]
+                or [rewrite_query(technology, item, state["retry_count"]) for item in items]
+            )
         ]
         for rank in range(services.settings.top_k):
             for results in lists:
@@ -34,6 +37,13 @@ def technical_agent(state, services):
                     chunks.setdefault(results[rank]["chunk_id"], results[rank])
         selected = list(chunks.values())[: services.settings.max_context_chunks]
         evidence.update(
-            extract_evidence(services, selected, technology=technology, perspective="technical", items=items)
+            extract_evidence(
+                services,
+                selected,
+                technology=technology,
+                perspective="technical",
+                items=items,
+                retry_count=state["retry_count"],
+            )
         )
     return {"technical_evidence": evidence}

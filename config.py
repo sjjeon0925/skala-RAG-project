@@ -29,22 +29,39 @@ TECHNICAL_EVIDENCE_ITEMS = (
     "출처",
 )
 DOMAIN_CRITERIA = (
-    "Capacity",
-    "HBM 절감 효과",
-    "Latency (TTFT/TPOT)",
-    "Throughput",
-    "Bandwidth / Data Movement",
-    "Attention 실행 위치",
-    "Scalability",
-    "Infrastructure Cost / Complexity",
+    "용량",
+    "성능",
+    "데이터 이동",
+    "확장성",
+    "비용과 구축 복잡도",
 )
 
 PERSPECTIVES = ("trl", "market", "stakeholder", "domain")
 EVALUATION_CRITERIA = {
     "trl": ("검증 단계", "실환경 검증", "제품화 근거"),
-    "market": ("제품화 및 실제 도입", "시장 및 생태계", "도입 장벽"),
-    "stakeholder": ("개발자", "도입 기업", "HW 업체", "산업계"),
+    "market": ("제품화", "실제 도입", "지원 생태계", "시장 규모·성장성", "도입 장벽"),
+    "stakeholder": ("기대 효과", "비용 부담", "호환성", "도입 난이도", "운영상 우려"),
     "domain": DOMAIN_CRITERIA,
+}
+QUERY_TERMS = {
+    "검증 단계": "paper proof of concept prototype validation",
+    "실환경 검증": "production deployment operational validation",
+    "제품화 근거": "commercial product roadmap availability",
+    "제품화": "commercial product availability",
+    "실제 도입": "deployment customer adoption",
+    "지원 생태계": "software ecosystem CXL PIM support",
+    "시장 규모·성장성": "market size growth forecast CXL PIM",
+    "도입 장벽": "adoption barrier cost integration",
+    "기대 효과": "developer operator expected benefit statement",
+    "비용 부담": "hardware software cost concern statement",
+    "호환성": "compatibility integration concern statement",
+    "도입 난이도": "deployment migration difficulty statement",
+    "운영상 우려": "operations reliability concern statement",
+    "용량": "KV cache capacity HBM reduction",
+    "성능": "latency TTFT TPOT throughput requests baseline",
+    "데이터 이동": "bandwidth data movement attention location",
+    "확장성": "context length concurrent requests scalability",
+    "비용과 구축 복잡도": "hardware compatibility software operations complexity cost",
 }
 
 
@@ -57,7 +74,12 @@ class Settings:
     embedding_model: str = EMBEDDING_MODEL
     embedding_revision: str | None = EMBEDDING_REVISION
     chunk_tokens: int = 400
-    overlap_tokens: int = 40
+    overlap_tokens: int = 50
+    dense_top_k: int = 10
+    bm25_top_k: int = 10
+    embedding_device: str = "cpu"
+    embedding_threads: int = 1
+    web_allowed_domains: tuple[str, ...] = ()
     top_k: int = 5
     max_context_chunks: int = 30
     search_results: int = 5
@@ -71,14 +93,23 @@ class Settings:
         if not 0 <= self.overlap_tokens < self.chunk_tokens <= 500:
             raise ValueError("0 <= overlap_tokens < chunk_tokens <= 500 필요")
         if (
-            min(self.top_k, self.max_context_chunks, self.search_results, self.max_claims_per_perspective) < 1
+            min(
+                self.top_k,
+                self.dense_top_k,
+                self.bm25_top_k,
+                self.embedding_threads,
+                self.max_context_chunks,
+                self.search_results,
+                self.max_claims_per_perspective,
+            )
+            < 1
             or self.request_timeout <= 0
         ):
             raise ValueError("검색/문맥/주장 개수 및 timeout은 양수여야 함")
 
     @classmethod
     def from_env(cls):
-        model = os.getenv("GENERATOR_MODEL") or "gpt-4.1-mini"
+        model = os.getenv("GENERATOR_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4.1-mini"
         embedding_model = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL
         return cls(
             model=model,
@@ -87,7 +118,14 @@ class Settings:
             embedding_revision=os.getenv("EMBEDDING_REVISION")
             or (EMBEDDING_REVISION if embedding_model == EMBEDDING_MODEL else None),
             chunk_tokens=int(os.getenv("CHUNK_TOKENS", "400")),
-            overlap_tokens=int(os.getenv("CHUNK_OVERLAP", "40")),
+            overlap_tokens=int(os.getenv("CHUNK_OVERLAP", "50")),
+            dense_top_k=int(os.getenv("DENSE_TOP_K", "10")),
+            bm25_top_k=int(os.getenv("BM25_TOP_K", "10")),
+            embedding_device=os.getenv("EMBEDDING_DEVICE", "cpu"),
+            embedding_threads=int(os.getenv("EMBEDDING_THREADS", "1")),
+            web_allowed_domains=tuple(
+                x.strip() for x in os.getenv("WEB_ALLOWED_DOMAINS", "").split(",") if x.strip()
+            ),
             top_k=int(os.getenv("TOP_K", "5")),
             max_context_chunks=int(os.getenv("MAX_CONTEXT_CHUNKS", "30")),
             search_results=int(os.getenv("SEARCH_RESULTS", "5")),

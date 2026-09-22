@@ -5,7 +5,8 @@
 | 위치 | 책임 |
 | --- | --- |
 | tools/llm.py | 비신뢰 자료 취급, 근거 기반 응답, OpenAI 구조화 출력 |
-| evidence.py | 기술/웹 자료에서 근거 추출, 인용문과 실험 조건 청크 검증 |
+| evidence.py | 기술/웹 자료에서 근거 추출, 인용문·수치·단위·실험 조건 검증 |
+| tools/grounding.py | 대상 기술·범위·주장 의미의 독립 검증 |
 | agents/common.py | 관점별 평가 기준, TRL 단계, Fact/Opinion/Inference |
 | nodes/verification.py | 반대 근거 검색 결과 판정, 상충 분석 |
 | agents/synthesis.py | State만을 사용한 종합 |
@@ -13,4 +14,4 @@
 | rag/queries.py | 기술 부족 항목별 결정적 Query Rewrite |
 | report_outline.md | 설계서 보고서 목차 |
 
-원문 인용 검증은 문자열/출처 검증이며 의미적 사실 검증의 보증은 아니다. 보고서 제출 전 검토가 필요하다.
+문자열·수치 검사와 LLM 의미 검증은 오류를 줄이지만 완전한 사실성 보증은 아니다. 보고서 제출 전 검토가 필요하다.

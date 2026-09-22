@@ -35,11 +35,12 @@ def route_retry_limit(state):
 
 
 def query_rewrite(state):
-    # 15개 State 필드를 유지한다. 재작성은 순수 함수 rewrite_query로 구현되며
-    # technical에서 이 전략 번호와 부족 항목으로 정확히 재현한다.
+    from rag.queries import rewrite_query
     count = state["retry_count"] + 1
     get_logger().info("QUERY_REWRITE | strategy=%d | queries=%d", count, len(state["missing_evidence"]))
-    return {"retry_count": count}
+    queries = [rewrite_query(x["technology"], x["item"], count)
+               for x in state["missing_evidence"] if x["stage"] == 1]
+    return {"retry_count": count, "search_queries": queries}
 
 
 def record_first_missing(state):
@@ -63,13 +64,21 @@ def second_evidence_check(state):
                     for f in findings
                 )
                 if not covered:
+                    detail = next(
+                        (
+                            gap["reason"]
+                            for gap in state[f"{perspective}_analysis"].get("missing_evidence", [])
+                            if gap["technology"] == technology and gap["item"] == criterion
+                        ),
+                        "평가 주장 또는 연결 근거 부족",
+                    )
                     missing.append(
                         {
                             "stage": 2,
                             "technology": technology,
                             "perspective": perspective,
                             "item": criterion,
-                            "reason": "평가 주장 또는 연결 근거 부족",
+                            "reason": detail,
                             "status": "pending",
                         }
                     )

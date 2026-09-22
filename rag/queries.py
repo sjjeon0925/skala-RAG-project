@@ -15,6 +15,8 @@ TECHNICAL_TERMS = {
 
 def rewrite_query(technology, item, retry_count):
     terms = TECHNICAL_TERMS.get(item, item)
+    if technology == "CXL-PIM":
+        terms = "PNM-KV PnG-KV " + terms
     if retry_count == 0:
         return f"{technology} {item} {terms}"
     if retry_count == 1:

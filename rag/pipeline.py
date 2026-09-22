@@ -9,7 +9,7 @@ from pathlib import Path
 from config import DOCUMENT_MANIFEST, INDEX_DIR, MAX_DOCUMENT_PAGES, Settings
 from workflow_logging import get_logger, log_operation
 
-SPLITTER_VERSION = "page-column-section-token-v2"
+SPLITTER_VERSION = "page-column-table-parent-token-v3"
 
 
 def _digest(value):
@@ -68,6 +68,8 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
         raise ValueError(f"문서 합계가 {MAX_DOCUMENT_PAGES}페이지 상한 초과")
     documents = []
     for row, count in zip(rows, counts):
+        if row.get("pages") and row["pages"] != count:
+            raise ValueError(f"문서 페이지 수 불일치: {row['document_id']}")
         with fitz.open(row["path"]) as pdf:
             for number, page in enumerate(pdf, 1):
                 paragraphs = []
@@ -80,6 +82,15 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
                 if not paragraphs:
                     get_logger().warning("PDF_EMPTY_PAGE | document=%s | page=%d", row["document_id"], number)
                     continue
+                try:
+                    tables = page.find_tables().tables
+                except (AttributeError, RuntimeError, ValueError):
+                    tables = []
+                table_text = [table.to_markdown() for table in tables]
+                content = "\n\n".join([*paragraphs, *table_text])
+                protected_table = bool(tables) or any(
+                    re.search(r"\bTable\s+\d+[.:]", paragraph, re.I) for paragraph in paragraphs
+                )
                 documents.append(
                     {
                         "technology": row["technology"],
@@ -89,9 +100,13 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
                         "role": row["role"],
                         "page": number,
                         "paragraphs": paragraphs,
-                        "content": "\n\n".join(paragraphs),
+                        "content": content,
                         "author": row.get("author", ""),
                         "year": row.get("year", ""),
+                        "venue": row.get("venue", ""),
+                        "arxiv_id": row.get("arxiv_id", ""),
+                        "protected_table": protected_table,
+                        "detected_tables": len(tables),
                     }
                 )
         get_logger().info("PDF_READY | document=%s | pages=%d", row["document_id"], count)
@@ -102,12 +117,17 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
 
 class E5Embeddings:
     def __init__(self, settings: Settings):
+        import os
+        import torch
         from sentence_transformers import SentenceTransformer
 
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        torch.set_num_threads(settings.embedding_threads)
         self.model = SentenceTransformer(
             settings.embedding_model,
             revision=settings.embedding_revision,
             cache_folder=str(settings.model_cache_dir),
+            device=settings.embedding_device,
         )
         self.tokenizer = self.model.tokenizer
         self.model.max_seq_length = 512
@@ -168,6 +188,24 @@ def split_documents(documents: list, *, tokenizer=None, settings=None) -> list[d
         )
     chunks = []
     for document in documents:
+        if document.get("protected_table"):
+            parent = document["content"]
+            windows = _token_windows(parent, tokenizer, settings.chunk_tokens, settings.overlap_tokens)
+            for index, embedding_content in enumerate(windows):
+                identifier = (
+                    f"{document['document_id']}-p{document['page']}-table-{index}-"
+                    f"{_digest(embedding_content.encode())[:8]}"
+                )
+                metadata = {k: v for k, v in document.items() if k not in ("paragraphs", "content")}
+                chunks.append(
+                    {
+                        **metadata,
+                        "content": parent,
+                        "embedding_content": embedding_content,
+                        "chunk_id": identifier,
+                    }
+                )
+            continue
         segments = []
         for paragraph in document.get("paragraphs", [document["content"]]):
             segments.extend(
@@ -200,7 +238,9 @@ def split_documents(documents: list, *, tokenizer=None, settings=None) -> list[d
                 raise ValueError("청크 토큰 한도 초과")
             identifier = f"{document['document_id']}-p{document['page']}-c{i}-{_digest(content.encode())[:8]}"
             metadata = {k: v for k, v in document.items() if k not in ("paragraphs", "content")}
-            chunks.append({**metadata, "content": content, "chunk_id": identifier})
+            chunks.append(
+                {**metadata, "content": content, "embedding_content": content, "chunk_id": identifier}
+            )
     if not chunks:
         raise ValueError("빈 청크 인덱스 생성 불가")
     get_logger().info(
@@ -244,7 +284,10 @@ class DenseIndex:
 def build_index(chunks: list, embeddings, index_dir: Path = INDEX_DIR):
     import numpy as np
 
-    vectors = np.asarray(embeddings.embed_documents([x["content"] for x in chunks]), dtype="float32")
+    vectors = np.asarray(
+        embeddings.embed_documents([x.get("embedding_content", x["content"]) for x in chunks]),
+        dtype="float32",
+    )
     if vectors.ndim != 2 or len(vectors) != len(chunks) or not np.isfinite(vectors).all():
         raise ValueError("임베딩 개수/차원/유한성 검증 실패")
     return DenseIndex(vectors)
@@ -259,7 +302,9 @@ class HybridRetriever:
         from rank_bm25 import BM25Okapi
 
         self.index, self.chunks, self.embeddings, self.settings = vectorstore, chunks, embeddings, settings
-        self.bm25 = BM25Okapi([lexical_tokens(x["content"]) or ["__empty__"] for x in chunks])
+        self.bm25 = BM25Okapi(
+            [lexical_tokens(x.get("embedding_content", x["content"])) or ["__empty__"] for x in chunks]
+        )
 
     @log_operation("HYBRID_SEARCH")
     def search(self, query, *, perspective, technology=None, role=None, k=None, mode="hybrid"):
@@ -282,19 +327,34 @@ class HybridRetriever:
             vector = np.asarray([self.embeddings.embed_query(query)], dtype="float32")
             # subset을 다 찾은 뒤 필터링: 다른 기술이 top-k를 독점하지 않게 한다.
             _, ids = self.index.search(vector, len(self.chunks))
-            rankings.append([int(i) for i in ids[0] if int(i) in eligible][: max(20, k * 4)])
+            rankings.append(
+                [int(i) for i in ids[0] if int(i) in eligible][: self.settings.dense_top_k]
+            )
         if mode in ("bm25", "hybrid"):
             scores = self.bm25.get_scores(lexical_tokens(query))
             rankings.append(
                 sorted((i for i in eligible if scores[i] > 0), key=lambda i: (-scores[i], i))[
-                    : max(20, k * 4)
+                    : self.settings.bm25_top_k
                 ]
             )
         fused = {}
         for ranking in rankings:
             for rank, idx in enumerate(ranking, 1):
                 fused[idx] = fused.get(idx, 0.0) + 1 / (60 + rank)
-        ids = sorted(fused, key=lambda idx: (-fused[idx], idx))[:k]
+        ids, parents = [], set()
+        for idx in sorted(fused, key=lambda candidate: (-fused[candidate], candidate)):
+            chunk = self.chunks[idx]
+            parent = (
+                (chunk.get("document_id"), chunk.get("page"))
+                if chunk.get("protected_table")
+                else chunk["chunk_id"]
+            )
+            if parent in parents:
+                continue
+            parents.add(parent)
+            ids.append(idx)
+            if len(ids) == k:
+                break
         results = [{**self.chunks[i], "perspective": perspective, "score": fused[i]} for i in ids]
         get_logger().info(
             "RETRIEVAL_RESULT | perspective=%s | mode=%s | eligible=%d | selected=%d",
@@ -324,6 +384,8 @@ def get_retriever(settings=None, *, embeddings=None, rebuild=False):
         "revision": settings.embedding_revision,
         "chunk_tokens": settings.chunk_tokens,
         "overlap": settings.overlap_tokens,
+        "dense_top_k": settings.dense_top_k,
+        "bm25_top_k": settings.bm25_top_k,
         "splitter": SPLITTER_VERSION,
         "index_backend": "numpy-cosine-v1",
     }

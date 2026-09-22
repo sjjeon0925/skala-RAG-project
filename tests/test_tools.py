@@ -7,7 +7,7 @@ import httpx
 from config import Settings
 from schemas import Extraction
 from tools.llm import OpenAILLM
-from tools.web_search import TavilySearch, canonical_url
+from tools.web_search import TavilySearch, canonical_url, relevance
 
 
 class ToolTests(unittest.TestCase):
@@ -63,3 +63,8 @@ class ToolTests(unittest.TestCase):
     def test_unsafe_urls_rejected(self):
         self.assertFalse(canonical_url("file:///private/document"))
         self.assertFalse(canonical_url("https://secret@example.com/p"))
+
+    def test_target_ecosystem_and_other_pim_are_distinguished(self):
+        self.assertEqual(relevance("PNM-KV runs attention near memory", "CXL-PIM"), "direct")
+        self.assertEqual(relevance("CXL ecosystem market outlook", "CXL-PIM"), "ecosystem")
+        self.assertEqual(relevance("CENT: PIM Is All You Need", "CXL-PIM"), "comparison")
