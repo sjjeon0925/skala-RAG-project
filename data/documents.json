@@ -1,5 +1,163 @@
 [
-  {"technology": "ITME", "role": "core", "path": "data/papers/ITME.pdf", "source_url": "https://arxiv.org/abs/2606.12556"},
-  {"technology": "CXL-PIM", "role": "core", "path": "data/papers/CXL-PIM.pdf", "source_url": "https://arxiv.org/abs/2511.00321"},
-  {"technology": "InfiniGen", "role": "supporting", "path": "data/papers/InfiniGen.pdf", "source_url": "https://arxiv.org/abs/2406.19707"}
+  {
+    "document_id": "ITME",
+    "technology": "ITME",
+    "role": "core",
+    "path": "data/papers/ITME.pdf",
+    "pages": 13,
+    "title": "ITME: Inference Tiered Memory Expansion with Disaggregated CXL-Hybrid Memories",
+    "authors": [
+      "Hakbeom Jang",
+      "Younghoon Min",
+      "Sunwoong Kim",
+      "Taeyoung Ahn",
+      "Hanyee Kim",
+      "Youngpyo Joo",
+      "Hoshik Kim",
+      "Jongryool Kim"
+    ],
+    "published_at": "2026",
+    "source_url": "https://arxiv.org/abs/2606.12556",
+    "arxiv_id": "2606.12556",
+    "venue": ""
+  },
+  {
+    "document_id": "CXL-PIM",
+    "technology": "CXL-PIM",
+    "role": "core",
+    "path": "data/papers/CXL-PIM.pdf",
+    "pages": 13,
+    "title": "Scalable Processing-Near-Memory for 1M-Token LLM Inference: CXL-Enabled KV-Cache Management Beyond GPU Limits",
+    "authors": [
+      "Dowon Kim",
+      "MinJae Lee",
+      "Janghyeon Kim",
+      "HyuckSung Kwon",
+      "Hyeonggyu Jeong",
+      "Sang-Soo Park",
+      "Minyong Yoon",
+      "Si-Dong Roh",
+      "Yongsuk Kwon",
+      "Jinin So",
+      "Jungwook Choi"
+    ],
+    "published_at": "2025",
+    "source_url": "https://arxiv.org/abs/2511.00321",
+    "arxiv_id": "2511.00321",
+    "venue": ""
+  },
+  {
+    "document_id": "InfiniGen",
+    "technology": "InfiniGen",
+    "role": "supporting",
+    "path": "data/papers/InfiniGen.pdf",
+    "pages": 18,
+    "title": "InfiniGen: Efficient Generative Inference of Large Language Models with Dynamic KV Cache Management",
+    "authors": [
+      "Wonbeom Lee",
+      "Jungi Lee",
+      "Junghwan Seo",
+      "Jaewoong Sim"
+    ],
+    "published_at": "2024",
+    "source_url": "https://arxiv.org/abs/2406.19707",
+    "arxiv_id": "2406.19707",
+    "venue": ""
+  },
+  {
+    "document_id": "PagedAttention",
+    "technology": "PagedAttention",
+    "role": "supporting",
+    "path": "data/papers/PagedAttention.pdf",
+    "pages": 16,
+    "title": "Efficient Memory Management for Large Language Model Serving with PagedAttention",
+    "authors": [
+      "Woosuk Kwon",
+      "Zhuohan Li",
+      "Siyuan Zhuang",
+      "Ying Sheng",
+      "Lianmin Zheng",
+      "Cody Hao Yu",
+      "Joseph E. Gonzalez",
+      "Hao Zhang",
+      "Ion Stoica"
+    ],
+    "published_at": "2023",
+    "source_url": "https://doi.org/10.1145/3600006.3613165",
+    "arxiv_id": "2309.06180",
+    "venue": "SOSP 2023"
+  },
+  {
+    "document_id": "Mooncake",
+    "technology": "Mooncake",
+    "role": "supporting",
+    "path": "data/papers/Mooncake.pdf",
+    "pages": 17,
+    "title": "Mooncake: Trading More Storage for Less Computation — A KVCache-centric Architecture for Serving LLM Chatbot",
+    "authors": [
+      "Ruoyu Qin",
+      "Zheming Li",
+      "Weiran He",
+      "Jialei Cui",
+      "Feng Ren",
+      "Mingxing Zhang",
+      "Yongwei Wu",
+      "Weimin Zheng",
+      "Xinran Xu"
+    ],
+    "published_at": "2025",
+    "source_url": "https://www.usenix.org/conference/fast25/presentation/qin",
+    "arxiv_id": "",
+    "venue": "USENIX FAST 2025"
+  },
+  {
+    "document_id": "CENT",
+    "technology": "CENT",
+    "role": "supporting",
+    "path": "data/papers/CENT.pdf",
+    "pages": 20,
+    "title": "PIM Is All You Need: A CXL-Enabled GPU-Free System for Large Language Model Inference",
+    "authors": [
+      "Yufeng Gu",
+      "Alireza Khadem",
+      "Sumanth Umesh",
+      "Ning Liang",
+      "Xavier Servot",
+      "Onur Mutlu",
+      "Ravi Iyer",
+      "Reetuparna Das"
+    ],
+    "published_at": "2025",
+    "source_url": "https://doi.org/10.1145/3676641.3716267",
+    "arxiv_id": "2502.07578",
+    "venue": "ASPLOS 2025"
+  },
+  {
+    "document_id": "CacheGen",
+    "technology": "CacheGen",
+    "role": "supporting",
+    "path": "data/papers/CacheGen.pdf",
+    "pages": 19,
+    "title": "CacheGen: KV Cache Compression and Streaming for Fast Large Language Model Serving",
+    "authors": [
+      "Yuhan Liu",
+      "Hanchen Li",
+      "Yihua Cheng",
+      "Siddhant Ray",
+      "Yuyang Huang",
+      "Qizheng Zhang",
+      "Kuntai Du",
+      "Jiayi Yao",
+      "Shan Lu",
+      "Ganesh Ananthanarayanan",
+      "Michael Maire",
+      "Henry Hoffmann",
+      "Ari Holtzman",
+      "Junchen Jiang"
+    ],
+    "published_at": "2024",
+    "source_url": "https://doi.org/10.1145/3651890.3672274",
+    "arxiv_id": "",
+    "venue": "SIGCOMM 2024"
+  }
 ]

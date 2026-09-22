@@ -1,14 +1,24 @@
+from config import TECHNICAL_EVIDENCE_ITEMS, QUERY_TERMS, RESULTS_PER_CRITERION
+from agents.extraction import extract_evidence
+from rag.pipeline import get_retriever
 from state import ResearchState
 
 
 def technical_agent(state: ResearchState) -> dict:
-    """기술 조사 Agent (RAG).
-
-    입력: technologies, missing_evidence(항목별 "query" 포함).
-    출력: technical_evidence, references. retry_count는 query_rewrite가 올린다.
-    TODO: ITME/CXL-PIM 원문에서 config.TECHNICAL_EVIDENCE_ITEMS 추출.
-    TODO: InfiniGen은 오프로딩·데이터 이동의 보조 근거로만 사용.
-    TODO: missing_evidence가 있으면 각 항목의 query로 해당 근거만 재검색해
-    기존 technical_evidence에 합친다.
-    """
-    raise NotImplementedError("기술 조사 Agent의 논문 검색·근거 추출을 구현하세요.")
+    retriever = get_retriever()
+    evidence = dict(state['technical_evidence'])
+    for tech in state['technologies']:
+        for criterion in TECHNICAL_EVIDENCE_ITEMS:
+            if state['retry_count'] and not any(g['technology'] == tech and g['item'] == criterion for g in state['missing_evidence']):
+                continue
+            queries = [q for q in state['search_queries'] if q.startswith(tech + ' ') and QUERY_TERMS[criterion] in q]
+            if not queries:
+                queries = [q for q in state['search_queries'] if q.startswith(tech + ' ')]
+            candidates = {}
+            for query in queries:
+                for row in retriever.search(query, perspective='technical', technology=tech, role='core', k=RESULTS_PER_CRITERION):
+                    candidates[row['evidence_id']] = row
+            extracted, _ = extract_evidence(list(candidates.values())[:RESULTS_PER_CRITERION], technology=tech,
+                                           perspective='technical', criterion=criterion)
+            evidence.update(extracted)
+    return {'technical_evidence': evidence}

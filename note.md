@@ -1,3 +1,5 @@
+> 이전 설계 기록입니다. 현재 구현은 수정방안 설계서와 [README.md](README.md), [적용 기록](docs/implementation-notes.md)을 기준으로 합니다. 아래의 3편 제한·수정 범위·설정값은 현행 지침이 아닙니다.
+
 # Development Guide
 
 ## 1. 프로젝트 목표

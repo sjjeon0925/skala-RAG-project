@@ -1,4 +1,4 @@
-"""설계서 4.2~4.4의 실행 흐름. 각 노드 본체는 TODO 상태다."""
+"""설계서 4.2~4.4: 최대 2회 재검색, 네 관점 합류 후 검증·보고서."""
 
 from langgraph.graph import END, START, StateGraph
 

@@ -1,40 +1,47 @@
 from typing import Literal
 
+from config import TECHNICAL_EVIDENCE_ITEMS, PERSPECTIVE_CRITERIA, QUERY_TERMS
+from evidence import evidence_errors, collect_evidence, deduplicate_gaps
 from state import ResearchState
 
 
 def first_evidence_check(state: ResearchState) -> dict:
-    """1차 검사: 기술 근거 9항목과 성능 수치의 출처 확인.
+    valid = [e for e in state['technical_evidence'].values() if not evidence_errors(e)]
+    gaps = []
+    for tech in state['technologies']:
+        for item in TECHNICAL_EVIDENCE_ITEMS:
+            if not any(e['technology'] == tech and e.get('scope') == 'direct'
+                       and (e.get('criterion') == item or item == '출처') for e in valid):
+                gaps.append({'technology': tech, 'perspective': 'technical', 'item': item, 'reason': '검증된 직접 근거 없음'})
+    return {'missing_evidence': gaps}
 
-    TODO: 부족한 항목을 새로 계산해 missing_evidence를 덮어쓴다(충분하면 빈 목록).
-    재검색 한도 소진 시에도 이 결과가 그대로 남아 다음 단계로 전달된다.
-    """
-    raise NotImplementedError("1차 Evidence 충분성 검사를 구현하세요.")
 
-
-def route_first_evidence(state: ResearchState) -> Literal["rewrite", "evaluate"]:
-    """설계서 본문의 분기: 충분하거나 재검색 한도 소진 시 평가 진행.
-
-    State를 바꾸지 않고 판단만 한다.
-    TODO: missing_evidence가 비었으면 evaluate, retry_count < max_retries면 rewrite,
-    아니면 evaluate.
-    """
-    raise NotImplementedError("1차 검사와 재검색 횟수에 따른 라우팅을 구현하세요.")
+def route_first_evidence(state: ResearchState) -> Literal['rewrite', 'evaluate']:
+    return 'rewrite' if state['missing_evidence'] and state['retry_count'] < state['max_retries'] else 'evaluate'
 
 
 def query_rewrite(state: ResearchState) -> dict:
-    """Query Rewrite: 부족한 기술 근거에 맞춰 검색 질문 재작성.
-
-    TODO: retry_count를 1 올리고, missing_evidence 각 항목의 "query"에
-    재작성한 질의를 채워 반환한다(새 State 키를 만들지 않는다).
-    """
-    raise NotImplementedError("기술 조사 재검색용 Query Rewrite를 구현하세요.")
+    if state['retry_count'] >= state['max_retries']:
+        raise ValueError('Retry limit exhausted')
+    suffix = 'experimental setup results limitations' if state['retry_count'] == 0 else 'implementation evaluation discussion appendix'
+    queries = [f"{g['technology']} {QUERY_TERMS[g['item']]} {suffix}"
+               for g in state['missing_evidence'] if g['perspective'] == 'technical']
+    return {'retry_count': state['retry_count'] + 1, 'search_queries': list(dict.fromkeys(queries))}
 
 
 def second_evidence_check(state: ResearchState) -> dict:
-    """2차 검사: 4개 관점의 근거 확인 후 부족한 정보를 기록.
-
-    TODO: 기존 missing_evidence에 관점별 부족 항목을 이어 붙여 반환한다.
-    전체 검색은 다시 반복하지 않고, 검사 후 다음 검증 단계로 진행한다.
-    """
-    raise NotImplementedError("2차 Evidence 검사와 근거 부족 기록을 구현하세요.")
+    index = collect_evidence(state)
+    gaps = [g for g in state['missing_evidence'] if g['perspective'] == 'technical']
+    for perspective, criteria in PERSPECTIVE_CRITERIA.items():
+        analysis = state.get(f'{perspective}_analysis', {})
+        for tech in state['technologies']:
+            for criterion in criteria:
+                rows = [r for r in analysis.get('results', []) if r.get('technology') == tech and r.get('criterion') == criterion]
+                valid = any(r.get('claim') and r.get('evidence_ids') and
+                            (perspective != 'market' or criterion not in ('제품화', '실제 도입') or r.get('scope') == 'direct') and
+                            all(eid in index and not evidence_errors(index[eid]) for eid in r['evidence_ids']) for r in rows)
+                if not valid:
+                    previous = next((g for g in analysis.get('missing_evidence', [])
+                                     if g['technology'] == tech and g['item'] == criterion), None)
+                    gaps.append(previous or {'technology':tech,'perspective':perspective,'item':criterion,'reason':'검증된 인용 근거 없음'})
+    return {'missing_evidence': deduplicate_gaps(gaps)}
