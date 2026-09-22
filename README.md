@@ -114,9 +114,9 @@ uv sync --frozen --extra rag --extra dev
 
 ## Contributors
 
-- **Jung Jin-woo** : Agentic RAG Workflow, Evidence Validation, Logging, PDF Report
-- **sjjeon0925** : Project Structure, Agent/RAG Refactoring, Evidence Guard
-- **gncnWkd** : RAG Pipeline, Retrieval Evaluation, Evidence Validation
-- **정현주** : LangChain Refactoring, Query Rewrite, Document/Retrieval Configuration
-
-> Contributors의 역할은 Git 커밋 이력을 기준으로 정리했으며, 제출 전 실제 업무 분담과 대조해 최종 확정한다.
+- **백소현** : RAG 파이프라인, 기술 조사 Agent 구현
+- **윤정수** : TRL·시장 평가 Agent, Web Search 근거 구조화
+- **전상진** : 이해관계자·도메인 평가 Agent, 평가 기준 설계
+- **전현찬** : LangGraph·State·Fan-out/Fan-in 전체 흐름 구현
+- **정진우** : Evidence 검사·Query Rewrite·Counter-Evidence·Conflict Node 구현
+- **정현주** : Synthesis·Report Agent, Reference 연결, 통합 테스트
