@@ -9,6 +9,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 TECHNOLOGIES = ["ITME", "CXL-PIM"]
 SUPPORTING_TECHNOLOGIES = ("InfiniGen", "PagedAttention", "Mooncake", "CENT", "CacheGen")
 DOMAIN = "데이터센터·클라우드"
+# 설계서 1.1의 문제 정의. 보고서 배경 절에 그대로 싣는다.
+PROBLEM_STATEMENT = (
+    "데이터센터에서는 여러 사용자의 요청을 동시에 처리해야 하고, 문맥이 길어질수록 "
+    "KV Cache도 계속 커진다. 그 결과 GPU HBM만으로는 저장 공간이 부족해지고 동시에 "
+    "처리할 수 있는 요청 수도 줄어든다. KV Cache를 GPU 밖의 메모리나 스토리지로 옮기면 "
+    "저장 공간은 늘릴 수 있으나, 데이터를 다시 GPU로 가져오는 과정에서 지연과 대역폭 "
+    "문제가 발생한다. 따라서 HBM 용량 한계를 줄이면서도 데이터 이동으로 성능이 크게 "
+    "떨어지지 않는 방법이 필요하다."
+)
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 EMBEDDING_REVISION = "d128750597153bb5987e10b1c3493a34e5a4502a"
 MAX_DOCUMENT_PAGES = 200

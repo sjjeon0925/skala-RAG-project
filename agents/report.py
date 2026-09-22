@@ -3,7 +3,7 @@
 import json
 import re
 
-from config import PERSPECTIVES
+from config import PERSPECTIVES, PROBLEM_STATEMENT, TECH_PROFILES
 from evidence import all_evidence, collect_references, valid_ids
 from state import technology_names
 from workflow_logging import get_logger
@@ -89,6 +89,40 @@ def synthesis_fallback(state):
     )
     conclusion = [summary_line] if findings else []
     return {"5.1": common, "5.3": tradeoffs, "5.4": conclusion}
+
+
+def evidence_independence(state):
+    """시장·이해관계자 근거의 독립성을 집계한다. 자료 부재 자체를 결과로 기록한다."""
+    notes = []
+    for perspective in ("market", "stakeholder"):
+        evidence = list(state[f"{perspective}_analysis"].get("evidence", {}).values())
+        # 대상 논문 자신의 arXiv HTML 등은 제3자 자료가 아니다.
+        paper_ids = tuple(
+            identifier
+            for profile in TECH_PROFILES.values()
+            for identifier in profile.get("paper_ids", ())
+        )
+        third_party = [
+            item
+            for item in evidence
+            if item.get("role") == "web"
+            and item.get("scope") not in ("self_reported", "comparison")
+            and not any(identifier in item.get("source_url", "") for identifier in paper_ids)
+        ]
+        label = "시장성" if perspective == "market" else "이해관계자"
+        if not third_party:
+            notes.append(
+                f"- {label} 관점은 제3자 공개 자료를 확보하지 못했다. 대상 기술은 최근 공개된 "
+                "연구 단계 기술이어서 제품화·실제 도입·업계 반응에 관한 독립적인 공개 자료가 "
+                "존재하지 않는다. 이는 자료 탐색의 실패가 아니라 확인된 결과이며, "
+                "근거 부재를 부정적 평가로 바꾸지 않는다."
+            )
+        else:
+            notes.append(
+                f"- {label} 관점 근거 {len(evidence)}건 중 제3자 자료는 {len(third_party)}건이다. "
+                "나머지는 대상 논문 자체 보고이거나 상위 시장 자료이므로 구분해 해석해야 한다."
+            )
+    return notes
 
 
 def trl_levels(state, technology):
@@ -242,7 +276,9 @@ def _render_report(state, draft, *, mode="live"):
         lines.extend([f"### {section_id} {title}", ""])
         paragraphs = [cited(p) for p in content.get(section_id, [])]
         paragraphs = [p for p in paragraphs if p]
-        if section_id == "1.2":
+        if section_id == "1.1":
+            paragraphs.insert(0, PROBLEM_STATEMENT)
+        elif section_id == "1.2":
             paragraphs.insert(
                 0, f"분석 범위는 {state['domain']}에서 ITME와 CXL-PIM의 KV Cache 관리 방식이다."
             )
@@ -258,14 +294,23 @@ def _render_report(state, draft, *, mode="live"):
                 "기준 간 차이가 있는 경우 위의 통합 범위를 기준으로 해석한다."
             )
         elif section_id == "4.2":
-            # 대상 기술 자체의 채택 자료가 아닌 상위 시장 자료임을 먼저 밝힌다.
+            market_evidence = state["market_analysis"].get("evidence", {}).values()
+            ecosystem = [x for x in market_evidence if x.get("scope") == "ecosystem"]
             paragraphs.insert(
                 0,
-                "아래 시장성 근거는 대상 기술 자체의 채택·매출 자료가 아니라 "
-                "CXL·KV Cache 상위 시장과 생태계 자료이다. ITME와 CXL-PIM 개별 기술의 "
-                "제품화·실제 도입 근거는 공개 자료에서 확인되지 않았다.",
+                (
+                    "아래 시장성 근거에는 대상 기술 자체의 채택 자료가 아닌 CXL·KV Cache "
+                    "상위 시장·생태계 자료가 포함되어 있다. 개별 기술의 제품화·실제 도입 "
+                    "근거와 구분해 해석해야 한다."
+                )
+                if ecosystem
+                else (
+                    "ITME와 CXL-PIM의 제품화·실제 도입·시장 규모에 관한 공개 자료는 "
+                    "확인되지 않았다. 아래 내용은 확보된 범위의 근거에 한정된다."
+                ),
             )
         elif section_id == "6.1":
+            paragraphs.extend(evidence_independence(state))
             for gap in state["missing_evidence"]:
                 paragraphs.append(
                     f"- 미확인: {gap['technology']} / {gap.get('perspective', 'technical')} / "
@@ -300,7 +345,14 @@ def _render_report(state, draft, *, mode="live"):
     lines.extend(["", "## REFERENCE", ""])
     for index, ref in enumerate(refs, 1):
         tier = min(
-            (evidence[eid].get("source_tier", 5) for eid in ref["evidence_ids"] if eid in evidence),
+            # 로컬 논문 PDF(role=core/supporting)는 등급 1이다. 웹 근거만 판정값을 쓴다.
+            (
+                evidence[eid].get("source_tier", 5)
+                if evidence[eid].get("role") == "web"
+                else 1
+                for eid in ref["evidence_ids"]
+                if eid in evidence
+            ),
             default=5,
         )
         lines.append(_reference_text(index, ref) + f" [출처 등급 {tier}: {SOURCE_TIER_LABELS[tier]}]")

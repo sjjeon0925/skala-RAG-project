@@ -47,6 +47,15 @@ def save_outputs(result, settings, run_id, output_dir, mode):
     directory = output_dir / (datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S") + "-" + run_id)
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "report.md").write_text(result["final_report"], encoding="utf-8")
+    if result.get("final_report", "").strip():
+        from tools.pdf_export import export_pdf
+
+        try:
+            export_pdf(result["final_report"], directory / "report.pdf")
+        except Exception as exc:  # noqa: BLE001 -- 변환 실패로 실행 결과를 버리지 않는다.
+            get_logger().error("REPORT_PDF_FAILED | %s | Markdown은 저장됨", type(exc).__name__)
+        else:
+            get_logger().info("REPORT_PDF_SAVED | %s", directory / "report.pdf")
     (directory / "state.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "run.json").write_text(
         json.dumps(
@@ -99,7 +108,7 @@ def main(argv=None):
 
         if args.env_file and not args.env_file.is_file():
             raise FileNotFoundError("지정한 env 파일 없음")
-        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=False)
+        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=True)
         settings = Settings.from_env()
         state = initial_state(max_retries=args.max_retries)
         if args.show_state:

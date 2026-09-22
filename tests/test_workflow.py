@@ -132,7 +132,13 @@ class WorkflowTests(unittest.TestCase):
             patch.dict("os.environ", {"OPENAI_API_KEY": "", "TAVILY_API_KEY": ""}),
             tempfile.TemporaryDirectory() as directory,
         ):
-            self.assertEqual(main(["--run", "--output-dir", directory]), 1)
+            # 빈 env 파일을 지정해 프로젝트 .env가 로드되지 않게 한다.
+            # 그렇지 않으면 override=True가 실제 키를 넣어 테스트가 유료 API를 호출한다.
+            empty_env = Path(directory) / "empty.env"
+            empty_env.write_text("", encoding="utf-8")
+            self.assertEqual(
+                main(["--run", "--output-dir", directory, "--env-file", str(empty_env)]), 1
+            )
             self.assertEqual(list(Path(directory).glob("*/report.md")), [])
         configure_logging("ERROR")
 

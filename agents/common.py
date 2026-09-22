@@ -62,6 +62,11 @@ def evaluate(state, services, perspective, sources, evidence=None):
         ):
             limitations.append("근거 ID 또는 평가 항목 검증 실패로 일부 주장을 제외함.")
             continue
+        # 보조 문서(CENT 등) 근거는 대상 기술 주장의 인용에서 제외한다. 비교 맥락 전용이다.
+        own_ids = [i for i in item["evidence_ids"] if evidence[i]["technology"] == item["technology"]]
+        if len(own_ids) != len(item["evidence_ids"]):
+            limitations.append("보조 문서 근거를 대상 기술 주장의 인용에서 제외함.")
+            item["evidence_ids"] = own_ids
         if perspective != "trl":
             item["trl_level"] = None
         elif item["trl_level"] is not None:
