@@ -35,6 +35,8 @@ def counter_evidence_node(state, services):
                 services.llm.generate(
                     "counter",
                     "target_claim을 실제 반박하거나 적용 범위를 제한하는 자료만 찾는다. "
+                    "target_claim을 재확인·지지·부연하는 자료는 반대 근거가 아니므로 found=false. "
+                    
                     "관련 없는 부정적 문장은 반대 근거가 아니다. found=false이면 나머지는 빈 문자열. "
                     "found=true이면 source_id=전달된 chunk_id, quote=원문 그대로, counter_claim=요약. "
                     "서로 다른 실험 조건이라면 그 차이가 무엇인지 밝힌다.",

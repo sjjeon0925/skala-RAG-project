@@ -96,7 +96,7 @@ def main(argv=None):
 
         if args.env_file and not args.env_file.is_file():
             raise FileNotFoundError("지정한 env 파일 없음")
-        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=False)
+        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=True)
         settings = Settings.from_env()
         state = initial_state(max_retries=args.max_retries)
         if args.show_state:
@@ -127,10 +127,26 @@ def main(argv=None):
                 from services import live_services
 
                 services = live_services(settings)
-            graph = build_graph(run_id, services)
-            result = graph.invoke(
-                state, config={"recursion_limit": 30 + 5 * args.max_retries, "max_concurrency": 4}
-            )
+            from langgraph.checkpoint.memory import MemorySaver
+
+            graph = build_graph(run_id, services, checkpointer=MemorySaver())
+            config = {
+                "recursion_limit": 30 + 5 * args.max_retries,
+                "max_concurrency": 4,
+                "configurable": {"thread_id": run_id},
+            }
+            try:
+                result = graph.invoke(state, config=config)
+            except Exception:
+                # 한 단계 실패로 앞선 모든 호출 결과를 잃지 않도록 마지막 상태를 남긴다.
+                partial = graph.get_state(config).values if graph.get_state(config) else None
+                if partial:
+                    directory = save_outputs(
+                        {**partial, "final_report": partial.get("final_report", "")},
+                        settings, run_id, args.output_dir, services.mode,
+                    )
+                    logger.error("PARTIAL_SAVED | directory=%s | 재실행 없이 상태 확인 가능", directory)
+                raise
             directory = save_outputs(result, settings, run_id, args.output_dir, services.mode)
             logger.info("REPORT_SAVED | directory=%s", directory)
             logger.info(

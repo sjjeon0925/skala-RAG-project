@@ -1,15 +1,15 @@
 """라벨이 있는 20개 질의로 multilingual-e5-small/base를 비교한다."""
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
-import sys
 from time import perf_counter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from config import PROJECT_ROOT, Settings
-from rag.pipeline import build_hybrid_retriever, build_index, E5Embeddings, load_documents, split_documents
+from rag.pipeline import E5Embeddings, build_hybrid_retriever, build_index, load_documents, split_documents
 
 
 def main():

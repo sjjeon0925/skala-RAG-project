@@ -5,19 +5,13 @@ import os
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-from config import Settings
+from config import DOMAIN_TERMS, NEGATIVE_KEYWORDS, TECH_PROFILES, Settings
 from workflow_logging import get_logger, log_operation
 
 TRUSTED_DOMAINS = (
     "arxiv.org", "acm.org", "ieee.org", "usenix.org",
     "computeexpresslink.org", "semiconductor.samsung.com",
 )
-TECH_ALIASES = {
-    "ITME": ("ITME", "Inference Tiered Memory Expansion"),
-    "CXL-PIM": ("CXL-PIM", "PNM-KV", "PnG-KV"),
-}
-
-
 def canonical_url(url: str) -> str:
     parts = urlsplit(url.strip())
     if parts.scheme not in ("https", "http") or not parts.netloc or parts.username:
@@ -25,18 +19,42 @@ def canonical_url(url: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path, parts.query, ""))
 
 
+def self_reported(url: str, technology: str) -> bool:
+    """웹 결과가 대상 논문 자신(arXiv HTML 등)인지 판별한다.
+
+    저자 자신의 주장은 근거로 쓸 수 있으나 제3자 검증과 구분해야 한다.
+    """
+    identifiers = TECH_PROFILES.get(technology, {}).get("paper_ids", ())
+    return any(identifier in url for identifier in identifiers)
+
+
+def _has(text, terms):
+    return any(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, re.IGNORECASE) for term in terms)
+
+
 def relevance(text: str, technology: str) -> str | None:
-    """대상 시스템, 상위 생태계, 별도 비교 시스템을 구분한다."""
-    if technology not in TECH_ALIASES:
+    """대상 시스템, 상위 생태계, 무관한 동명 자료를 구분한다.
+
+    ITME는 섬유기계 단체/전시회, 채용 플랫폼, 해양생태 연구소와 이름이 겹치고
+    CXL-PIM은 조별 호칭이라 일반 CXL/PIM 문서와 구분되지 않는다. 따라서
+    고유 명칭이 없으면 도메인 단서를 요구하고, 무관 키워드가 있으면 버린다.
+    """
+    profile = TECH_PROFILES.get(technology)
+    if profile is None:
         return "comparison"
-    if technology == "CXL-PIM" and re.search(r"\bCENT\b|PIM Is All You Need", text, re.I):
+    # 별도 시스템(CENT)은 비교 대상으로만 사용한다.
+    if technology == "CXL-PIM" and re.search(r"\bCENT\b|PIM Is All You Need", text, re.IGNORECASE):
         return "comparison"
-    if any(
-        re.search(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", text, re.I)
-        for alias in TECH_ALIASES[technology]
-    ):
+    if _has(text, profile["distinctive"]):
         return "direct"
-    if technology == "CXL-PIM" and re.search(r"\b(CXL|PIM|PNM)\b", text, re.I):
+    if _has(text, NEGATIVE_KEYWORDS):
+        return None
+    if not _has(text, DOMAIN_TERMS):
+        return None
+    # 고유 명칭 없이 모호한 약어만 있으면 대상 기술의 직접 근거로 인정하지 않는다.
+    if _has(text, profile["ambiguous"]):
+        return "ecosystem"
+    if technology == "CXL-PIM" and _has(text, ("CXL", "PIM", "PNM")):
         return "ecosystem"
     return None
 

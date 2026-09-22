@@ -25,7 +25,7 @@ NUMBER = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)*(?![\w.])")
 UNIT = re.compile(
     r"(?<![A-Za-z0-9])\d+(?:[.,]\d+)*\s*"
     r"(%|×|x\b|배|ms\b|us\b|s\b|[KMGT]i?B(?:/s)?\b|tokens?/s\b)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -86,9 +86,7 @@ def extract_evidence(services, chunks, *, technology, perspective, items, retry_
                     condition is None
                     or condition["document_id"] != source["document_id"]
                     or not quote_exists(fact.experimental_condition, condition["content"])
-                ):
-                    reason = "missing_numeric_conditions"
-                elif UNIT.search(fact.claim) and not fact.numeric:
+                ) or UNIT.search(fact.claim) and not fact.numeric:
                     reason = "missing_numeric_conditions"
                 elif not numeric_supported(
                     fact.claim,

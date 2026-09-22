@@ -89,7 +89,7 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
                 table_text = [table.to_markdown() for table in tables]
                 content = "\n\n".join([*paragraphs, *table_text])
                 protected_table = bool(tables) or any(
-                    re.search(r"\bTable\s+\d+[.:]", paragraph, re.I) for paragraph in paragraphs
+                    re.search(r"\bTable\s+\d+[.:]", paragraph, re.IGNORECASE) for paragraph in paragraphs
                 )
                 documents.append(
                     {
@@ -118,6 +118,7 @@ def load_documents(manifest: Path = DOCUMENT_MANIFEST) -> list[dict]:
 class E5Embeddings:
     def __init__(self, settings: Settings):
         import os
+
         import torch
         from sentence_transformers import SentenceTransformer
 

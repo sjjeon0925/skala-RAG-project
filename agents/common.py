@@ -1,10 +1,10 @@
 """기술·평가 기준별 검색과 검증. 각 Agent는 자신의 analysis만 쓴다."""
 
-from config import EVALUATION_CRITERIA, QUERY_TERMS
+from config import EVALUATION_CRITERIA, QUERY_TERMS, TECH_PROFILES
 from evidence import extract_evidence, valid_ids
 from schemas import Evaluation
 from tools.grounding import statement, verify_statements
-from tools.web_search import relevance
+from tools.web_search import relevance, self_reported
 from workflow_logging import get_logger
 
 
@@ -119,16 +119,25 @@ def web_sources(state, services, perspective):
         sources[technology] = {}
         for criterion in EVALUATION_CRITERIA[perspective]:
             rows = []
-            for attempt in range(2):
-                suffix = "" if attempt == 0 else " official research industry evidence"
-                candidates = services.web.search(f'"{technology}" {QUERY_TERMS[criterion]}{suffix}')
+            # 동명이의 배제를 위해 고유 명칭으로 검색한다. 상위 생태계 근거를 인정하는
+            # 시장 관점에서만 약어 질의를 추가한다.
+            seeds = list(TECH_PROFILES.get(technology, {}).get("web_queries", ())) or [f'"{technology}"']
+            if perspective == "market":
+                seeds.append(f'"{technology}" CXL PIM KV cache market adoption')
+            for seed in seeds:
+                candidates = services.web.search(f"{seed} {QUERY_TERMS[criterion]}")
                 for candidate in candidates:
                     scope = (
                         "direct"
                         if services.mode == "demo"
                         else relevance(candidate["source"] + " " + candidate["content"], technology)
                     )
-                    if scope == "direct" or (perspective == "market" and scope == "ecosystem"):
+                    if scope == "direct" and self_reported(candidate["source_url"], technology):
+                        # 저자 자신의 주장은 제3자 검증과 구분해 표시한다.
+                        scope = "self_reported"
+                    if scope in ("direct", "self_reported") or (
+                        perspective == "market" and scope == "ecosystem"
+                    ):
                         rows.append({**candidate, "technology": technology, "scope": scope})
                 if rows:
                     break

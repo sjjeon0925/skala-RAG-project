@@ -34,12 +34,13 @@ def route_retry_limit(state):
     return "rewrite" if state["retry_count"] < state["max_retries"] else "missing"
 
 
-def query_rewrite(state):
-    from rag.queries import rewrite_query
+def query_rewrite(state, services):
+    from rag.queries import llm_rewrite_queries
     count = state["retry_count"] + 1
-    get_logger().info("QUERY_REWRITE | strategy=%d | queries=%d", count, len(state["missing_evidence"]))
-    queries = [rewrite_query(x["technology"], x["item"], count)
-               for x in state["missing_evidence"] if x["stage"] == 1]
+    targets = [x for x in state["missing_evidence"] if x["stage"] == 1]
+    get_logger().info("QUERY_REWRITE | strategy=%d | queries=%d", count, len(targets))
+    rewritten = llm_rewrite_queries(services, targets, count)
+    queries = [rewritten[(x["technology"], x["item"])] for x in targets]
     return {"retry_count": count, "search_queries": queries}
 
 

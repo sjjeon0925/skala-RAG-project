@@ -45,7 +45,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["missing_evidence"], [])
         self.assertTrue(state["final_report"])
         self.assertTrue(state["search_queries"])
-        self.assertTrue(all(query.startswith(("ITME ", "CXL-PIM ")) for query in state["search_queries"]))
+        # 재작성 질의는 대상 기술의 고유 명칭을 유지해 동명이의 문서를 배제해야 한다.
+        from rag.queries import distinctive_names
+
+        for query in state["search_queries"]:
+            identifiers = [
+                name
+                for technology in ("ITME", "CXL-PIM")
+                for name in [technology, *distinctive_names(technology)]
+            ]
+            self.assertTrue(
+                any(name.lower() in query.lower() for name in identifiers),
+                f"기술 식별자가 없는 질의: {query}",
+            )
 
     def test_retry_exhaustion_continues_and_preserves_gaps(self):
         state, _ = self.run_scenario("retry_exhausted")

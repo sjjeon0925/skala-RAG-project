@@ -91,3 +91,13 @@ class GroundingVerdict(StrictModel):
 
 class Grounding(StrictModel):
     verdicts: list[GroundingVerdict]
+
+
+class RewrittenQuery(StrictModel):
+    technology: str
+    item: str
+    query: str
+
+
+class RewrittenQueries(StrictModel):
+    queries: list[RewrittenQuery]

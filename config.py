@@ -65,6 +65,64 @@ QUERY_TERMS = {
 }
 
 
+# 동명이의(同名異義) 방지: 대상 기술을 고유하게 지칭하는 명칭과 도메인 단서.
+# "ITME"는 섬유기계 단체·전시회·채용 플랫폼·해양생태 연구소와 이름이 겹치고,
+# "CXL-PIM"은 조별 내부 호칭이라 일반 CXL/PIM 아키텍처 문서와 구분되지 않는다.
+TECH_PROFILES = {
+    "ITME": {
+        "paper_ids": ("2606.12556",),
+        "distinctive": (
+            "Inference Tiered Memory Expansion",
+            "Disaggregated CXL-Hybrid",
+        ),
+        "ambiguous": ("ITME",),
+        "web_queries": (
+            '"Inference Tiered Memory Expansion" CXL KV cache',
+            '"Inference Tiered Memory Expansion" LLM inference memory',
+        ),
+    },
+    "CXL-PIM": {
+        "paper_ids": ("2511.00321",),
+        "distinctive": (
+            "Scalable Processing-Near-Memory",
+            "PNM-KV",
+            "PnG-KV",
+            "1M-Token LLM Inference",
+        ),
+        "ambiguous": ("CXL-PIM", "CXL PNM", "CXL-PNM"),
+        "web_queries": (
+            '"Scalable Processing-Near-Memory" "1M-Token" KV cache',
+            '"CXL-Enabled KV-Cache Management Beyond GPU Limits"',
+        ),
+    },
+}
+
+# 대상 기술과 무관한 동명 조직·행사·서비스를 걸러낸다.
+NEGATIVE_KEYWORDS = (
+    "textile", "섬유", "방직", "garment", "weaving", "loom", "apparel",
+    "exhibition", "전시회", "trade fair", "expo",
+    "society", "association", "산업 단체",
+    "recruit", "채용", "hiring", "job board",
+    "marine", "해양", "ecology", "생태", "tropical",
+    "tourism", "travel", "hotel", "restaurant",
+)
+
+# 대상 기술이 속한 기술 도메인 단서. 모호한 약어만 나오면 이 단서를 함께 요구한다.
+DOMAIN_TERMS = (
+    "kv cache", "kv-cache", "llm", "inference", "gpu", "hbm", "memory expansion",
+    "cxl", "pim", "pnm", "processing-near-memory", "processing in memory",
+    "nvme", "dram", "attention", "token", "throughput", "bandwidth", "datacenter",
+    "메모리", "추론", "캐시", "대역폭",
+)
+
+# 기본 신뢰 도메인. .env의 WEB_ALLOWED_DOMAINS로 덮어쓸 수 있다.
+DEFAULT_ALLOWED_DOMAINS = (
+    "arxiv.org", "acm.org", "ieee.org", "usenix.org", "computeexpresslink.org",
+    "semiconductor.samsung.com", "skhynix.com", "micron.com", "intel.com",
+    "nvidia.com", "openreview.net", "sigarch.org", "hotchips.org",
+)
+
+
 @dataclass(frozen=True)
 class Settings:
     """설계서 미지정 파라미터는 교체 가능하며 최적값으로 간주하지 않는다."""
@@ -125,7 +183,8 @@ class Settings:
             embedding_threads=int(os.getenv("EMBEDDING_THREADS", "1")),
             web_allowed_domains=tuple(
                 x.strip() for x in os.getenv("WEB_ALLOWED_DOMAINS", "").split(",") if x.strip()
-            ),
+            )
+            or DEFAULT_ALLOWED_DOMAINS,
             top_k=int(os.getenv("TOP_K", "5")),
             max_context_chunks=int(os.getenv("MAX_CONTEXT_CHUNKS", "30")),
             search_results=int(os.getenv("SEARCH_RESULTS", "5")),

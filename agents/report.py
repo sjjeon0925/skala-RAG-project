@@ -9,6 +9,7 @@ SECTIONS = {
     "1": "분석 배경 및 문제 정의",
     "2": "평가 대상 기술 선정",
     "3": "기술 개요",
+    "4": "다관점 평가",
     "4.1": "기술 성숙도",
     "4.2": "시장성",
     "4.3": "이해관계자",
@@ -18,9 +19,36 @@ SECTIONS = {
 }
 
 
+def independence_notes(state):
+    """관점별 근거의 독립성을 집계한다. 공개 자료 부재 자체를 결과로 남긴다."""
+    notes = []
+    for perspective in PERSPECTIVES:
+        evidence = state[f"{perspective}_analysis"].get("evidence", {}).values()
+        if not evidence:
+            continue
+        independent = [
+            e for e in evidence if e.get("role") == "web" and e.get("scope") not in ("self_reported", "comparison")
+        ]
+        self_only = [e for e in evidence if e.get("scope") == "self_reported"]
+        if perspective in ("market", "stakeholder") and not independent:
+            notes.append(
+                f"- {perspective} 관점은 제3자 공개 자료를 확보하지 못했다. "
+                f"근거 {len(evidence)}건 중 {len(self_only)}건이 대상 논문 저자의 자체 보고이며, "
+                "제품화·도입 사례·업계 반응에 대한 독립적인 공개 자료는 확인되지 않았다. "
+                "이는 평가 대상이 최근 발표된 연구 단계 기술이기 때문이며, "
+                "자료 부재 자체를 결과로 기록하고 부정적 평가로 바꾸지 않는다."
+            )
+        elif self_only:
+            notes.append(
+                f"- {perspective} 관점 근거 {len(evidence)}건 중 {len(self_only)}건은 "
+                "대상 논문 저자의 자체 보고이므로 제3자 검증과 구분해 해석해야 한다."
+            )
+    return notes
+
+
 def render_report(state, draft, *, mode="live"):
     evidence = all_evidence(state)
-    used = set()
+    used, dropped = set(), []
 
     def cited(paragraph):
         if not paragraph["text"].strip() or not valid_ids(paragraph["evidence_ids"], evidence):
@@ -32,13 +60,22 @@ def render_report(state, draft, *, mode="live"):
 
             validation_text = re.sub(r"추정 TRL\s*[1-9]", "추정 TRL", validation_text)
         if not numeric_supported(validation_text, rows):
-            raise ValueError("보고서 수치 또는 단위가 인용 근거와 일치하지 않음")
+            # 근거와 어긋나는 수치는 싣지 않는다. 다만 문단 하나 때문에
+            # 실행 전체를 버리지 않고 해당 문단만 제외한 뒤 6장에 집계한다.
+            dropped.append(",".join(paragraph["evidence_ids"]))
+            get_logger().warning(
+                "REPORT_PARAGRAPH_DROPPED | reason=numeric_mismatch | evidence=%s",
+                ",".join(paragraph["evidence_ids"]),
+            )
+            return ""
         used.update(paragraph["evidence_ids"])
         scope = ""
         if any(row.get("scope") == "comparison" for row in rows):
             scope = "[보조 문서 비교 맥락] "
         elif any(row.get("scope") == "ecosystem" for row in rows):
             scope = "[상위 시장·생태계] "
+        elif rows and all(row.get("scope") == "self_reported" for row in rows):
+            scope = "[논문 저자 자체 보고] "
         conditions = list(
             dict.fromkeys(row["experimental_condition"] for row in rows if row.get("numeric"))
         )
@@ -71,7 +108,7 @@ def render_report(state, draft, *, mode="live"):
     for section_id, title in SECTIONS.items():
         heading = "###" if section_id.startswith("4.") else "##"
         lines.extend([f"{heading} {section_id}. {title}", ""])
-        source_paragraphs = [] if section_id == "6" else content.get(section_id, [])
+        source_paragraphs = [] if section_id in ("4", "6") else content.get(section_id, [])
         paragraphs = [cited(p) for p in source_paragraphs]
         paragraphs = [p for p in paragraphs if p]
         if section_id == "1":
@@ -85,6 +122,13 @@ def render_report(state, draft, *, mode="live"):
         elif section_id == "4.1":
             paragraphs.append("TRL은 공개 정보 기반 추정이며 공식 인증값이 아니다.")
         elif section_id == "6":
+            paragraphs.extend(independence_notes(state))
+            if dropped:
+                # 검증되지 않은 수치를 다시 싣지 않도록 문단 원문 대신 근거 ID만 기록한다.
+                paragraphs.append(
+                    f"- 수치 또는 단위가 인용 근거와 일치하지 않아 본문에서 제외한 문단 {len(dropped)}건 "
+                    f"(해당 근거 ID: {'; '.join(dropped)}). 제외된 내용은 보고서에 반영하지 않았다."
+                )
             for gap in state["missing_evidence"]:
                 paragraphs.append(
                     f"- 미확인: {gap['technology']} / {gap.get('perspective', 'technical')} / "
@@ -101,7 +145,8 @@ def render_report(state, draft, *, mode="live"):
                 "반대 근거 미발견은 원 주장의 참을 입증하지 않는다. "
                 "인용문 일치는 자동 확인했으나 주장과 인용의 의미적 일치에는 사람의 검토가 필요하다."
             )
-        lines.extend(paragraphs or ["검증된 자료로 작성할 내용이 부족합니다."])
+        if section_id != "4":
+            lines.extend(paragraphs or ["검증된 자료로 작성할 내용이 부족합니다."])
         lines.append("")
     # Fact/Opinion, TRL, 실험 조건, 반대 근거와 conflicts는 생성 모델이 누락해도 보존한다.
     lines.extend(["## 근거 검증 부록", ""])
