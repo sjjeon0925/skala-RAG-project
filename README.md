@@ -1,185 +1,122 @@
-# ITME와 CXL-PIM Agentic RAG 비교 평가
+# Subject
 
-데이터센터·클라우드의 KV Cache 관리 기술을 조사하고, TRL·시장·이해관계자·도메인 관점으로 평가하여 근거가 연결된 보고서를 생성한다. 기술은 사람이 선정하며 특정 기술의 승자를 정하지 않는다.
+본 프로젝트는 데이터센터·클라우드 환경의 KV Cache 최적화 기술을 SW·시스템 관리와 HW·메모리 근접 연산 관점에서 선정하고, TRL·시장·이해관계자·도메인 관점으로 비교 평가하는 Agentic RAG 프로젝트임.
 
-## 빠른 실행
+## Overview
 
-프로젝트 폴더에서 Python 3.11~3.13과 uv를 사용한다.
+- **Objective** : ITME와 CXL-PIM을 복수 관점에서 비교 평가하고 근거 기반 PDF 보고서 생성
+- **Method** : Multi-Agent(Distributed) + Agentic RAG
+- **Tools** : OpenAI Responses API, Tavily Search, PyMuPDF
 
-```bash
-uv sync --frozen --extra rag --extra dev
-.venv/bin/python app.py --show-graph
-.venv/bin/python app.py --demo
-.venv/bin/python -m unittest discover -s tests -q
-```
+## Selected Technologies
 
-`python`이 전역 Python alias라면 가상환경을 활성화해도 alias가 우선할 수 있다. 위처럼 `.venv/bin/python`을 직접 사용하면 정확한 인터프리터가 실행된다. `uv run --extra rag python ...`도 가능하다.
+- **SW·System : ITME** — 계층형 CXL/NVMe 메모리와 prefetch 제어로 KV Cache 저장 공간을 확장하고 데이터 이동을 관리하는 접근이므로 선정
+- **HW : CXL-PIM** — CXL memory 내 PNM 가속기로 token page selection과 attention 연산을 수행해 GPU 메모리 압력과 데이터 이동을 줄이는 접근이므로 선정
 
-`--demo`는 API와 임베딩 모델 다운로드 없이 가상 자료로 전체 흐름만 검증한다. 보고서에 DEMO 표시가 있으며, 실제 기술 분석 또는 제출 결과로 사용할 수 없다.
+> ITME는 순수 SW가 아닌 CXL-hybrid memory와 소프트웨어 제어를 결합한 HW/SW 공동 설계이다. 본 비교에서는 KV Cache 최적화의 주된 제어 지점을 기준으로 구분했다.
 
-### 실제 실행
+## Features
 
-1. `.env.example`을 참고하여 이 폴더에 `.env`를 만든다.
-2. `OPENAI_API_KEY`, `TAVILY_API_KEY`를 설정한다.
-3. 생성·판단 모델은 Responses API의 구조화 출력을 지원하는 모델로 지정한다.
-4. 아래 순서로 실행한다.
+- 핵심·보조 논문 PDF 7편 로딩 및 페이지·출처 메타데이터 보존
+- Dense 검색과 BM25를 RRF로 결합한 Hybrid Retrieval
+- 기술 조사, TRL, 시장, 이해관계자, 도메인 평가 Agent 분리
+- 4개 평가 Agent 병렬 실행 및 Fan-in 통합
+- 근거 부족 시 Query Rewrite 후 한정 재검색
+- 인용문·출처·기술·수치·실험 조건 검증 및 탈락 사유 기록
+- 최종 평가 보고서를 한국어 A4 PDF로 저장
+- **확증 편향 방지 전략** : 기술×평가 기준별 독립 검색, 반대 근거 검색, Conflict 분석, 근거 부족과 비교 한계 명시
 
-```bash
-.venv/bin/python app.py --check
-.venv/bin/python app.py --index
-.venv/bin/python app.py --run
-```
+## Tech Stack
 
-- `--check`: 패키지·키 존재·PDF 경로 점검. 키 값은 표시하지 않고, 인증/잔액/모델 권한까지 검증하지는 않는다.
-- `--index`: 첫 실행 시 공개 E5 모델 다운로드. 논문 임베딩은 로컬에서 수행한다. API 키 불필요.
-- `--run`: OpenAI 및 Tavily를 호출하며 비용이 발생할 수 있다. 모델 거부, API 인증/통신 오류는 실패로 종료하며 DEMO로 자동 대체하지 않는다.
-- 다른 환경 파일: `--env-file /절대경로/.env`. 선택한 dotenv 파일의 값이 기존 셸 환경변수보다 우선한다.
-- 모델·청크·검색 설정은 `.env.example` 참고. 원문 청크/발췌와 질문은 분석을 위해 OpenAI로, 검색 질의는 Tavily로 전송된다. 민감한 비공개 문서를 넣기 전 전송 범위를 확인한다.
+- **Framework** : LangGraph, LangChain
+- **LLM/Generator** : `gpt-4.1-mini`
+- **LLM/Judge** : `gpt-4.1-mini`
+- **Retrieval** : NumPy Vector Index + BM25 + RRF — Hybrid Hit Rate@10 `1.000`, MRR@10 `0.617`
+- **Embedding** : `intfloat/multilingual-e5-base`
+- **Web Search** : Tavily Search
+- **PDF Parsing/Report** : PyMuPDF, ReportLab
 
-### 저장 결과
+> Retrieval 성능은 정답 페이지가 라벨링된 내부 질의 8개를 기준으로 측정한 결과이다.
 
-```text
-outputs/
-  logs/날짜-실행ID.log
-  날짜-실행ID/
-    report.pdf    # SUMMARY, 1~6장, 본문 인용과 실제 사용한 REFERENCE
-    state.json    # 16개 State 필드, 실제 검색 질의 및 근거/평가 결과
-    run.json      # 실행 모드, 모델/검색 설정, 생성 시각
-```
+## Agents
 
-최종 사용자 보고서는 한국어 폰트를 포함한 A4 PDF로 저장한다. 검증된 Markdown 문자열은 PDF 렌더링의 내부 중간 표현이며 `state.json`의 `final_report`에 재현용으로 보존된다. `state.json`에는 인용문 등 자료 내용이 있으므로 로그와 달리 민감정보 포함 가능성이 있다. 결과·모델 캐시·인덱스·.env는 Git 추적에서 제외한다.
+- **Technical Research Agent** : 핵심 논문 RAG 및 기술 근거 추출
+- **TRL Evaluation Agent** : 논문·PoC·Prototype·상용화 단계 평가
+- **Market Evaluation Agent** : 제품화·도입·생태계·시장성 평가
+- **Stakeholder Evaluation Agent** : 개발자·도입 기업·투자 업계 관점 분석
+- **Domain Evaluation Agent** : 용량·성능·데이터 이동·확장성·비용 평가
+- **Counter-Evidence/Conflict Node** : 반대 근거 검색 및 상충 주장 분석
+- **Synthesis Agent** : 공통점·Trade-off·한계·종합 의견 생성
+- **Report Agent** : 검증된 State 기반 보고서 및 참고문헌 구성
 
-## 설계서 실행 흐름
+## Architecture
 
 ```mermaid
 flowchart TD
-  A[기술·도메인 입력] --> B[기술 조사 Agent / RAG]
-  B --> C{1차 근거 충분?}
-  C -->|충분| F[Fan-out]
-  C -->|부족| D{retry_count < max_retries?}
-  D -->|Yes| E[Query Rewrite]
-  E --> B
-  D -->|No| G[1차 missing_evidence 확정]
-  G --> F
-  F --> T[TRL / State + Web]
-  F --> M[시장 / Web]
-  F --> S[이해관계자 / Web]
-  F --> V[도메인 / State + RAG]
-  T --> J[Fan-in / 4개 평가 결과 합류]
-  M --> J
-  S --> J
-  V --> J
-  J --> K{2차 근거 충분?}
-  K -->|부족| L[2차 missing_evidence 기록]
-  K -->|충분| N[Counter-Evidence / Web]
-  L --> N
-  N --> O[Conflict 분석]
-  O --> P[평가 종합 Agent / State만 사용]
-  P --> Q[보고서 Agent / State만 사용]
-  Q --> R[보고서·State 저장]
+    A[기술·도메인 입력] --> B[기술 조사 Agent / RAG]
+    B --> C{1차 근거 충분?}
+    C -->|부족| D{retry_count < max_retries?}
+    D -->|Yes| E[Query Rewrite]
+    E --> B
+    D -->|No| F[missing_evidence 기록]
+    C -->|충분| G[4개 관점 Fan-out]
+    F --> G
+    G --> H[TRL Agent]
+    G --> I[시장 Agent]
+    G --> J[이해관계자 Agent]
+    G --> K[도메인 Agent]
+    H --> L[Fan-in]
+    I --> L
+    J --> L
+    K --> L
+    L --> M{2차 근거 충분?}
+    M -->|부족| N[missing_evidence 기록]
+    M -->|충분| O[Counter-Evidence]
+    N --> O
+    O --> P[Conflict Analysis]
+    P --> Q[Synthesis Agent]
+    Q --> R[Report Agent]
+    R --> S[최종 PDF 보고서]
 ```
 
-7개 Agent와 흐름 제어 노드를 분리했다. 네 평가 노드는 실제 병렬 실행되며, 모두 완료된 뒤 Fan-in이 한 번 실행된다.
+## Directory Structure
 
-| 역할/기능 | 파일 | 입력과 책임 |
-| --- | --- | --- |
-| 기술 조사 | agents/technical.py | 핵심 논문 RAG, 보고서에 명시된 8개 조사 항목의 인용 근거 추출 |
-| TRL | agents/trl.py | technical_evidence + Web, 추정 성숙도; Vector DB 직접 호출 없음 |
-| 시장 | agents/market.py | Web 자료로 제품화·도입·생태계·시장 성장성·도입 장벽 |
-| 이해관계자 | agents/stakeholder.py | Web 자료로 경쟁 진영·도입 기업/개발자·투자 업계 관점 평가 |
-| 도메인 | agents/domain.py | RAG + 기술 근거, 용량·성능·데이터 이동·확장성·비용/구축의 5개 기준; 비교 문서는 보조 자료로 분리 |
-| 종합 | agents/synthesis.py | 4개 평가·반대 근거·상충·부족 항목 종합, 추가 검색 없음 |
-| 보고서 | agents/report.py | contents_writer → report_generator, 새 평가/검색 없이 기존 결과를 목차에 맞춰 구성 |
-| 검사·재검색 | nodes/evidence.py | 1차/2차 검사, 한도 판단, 부족 근거 기록 |
-| 반증·상충 | nodes/verification.py | 주요 주장당 Web 검색 1회, 상충 분석 |
-| 근거 계약 | evidence.py, schemas.py | 인용문·ID 검증, 구조화 출력, 참고문헌 병합 |
-| Graph·State | graph.py, state.py | 17개 노드, 설계서의 State 필드 16개, 선택적 checkpointer 주입 |
+```text
+├── data/                  # 논문 PDF, 문서 manifest, 검색 평가 질의
+├── agents/                # 기술·TRL·시장·이해관계자·도메인·종합·보고서 Agent
+├── nodes/                 # 근거 검사, 재검색, 반증, Conflict 노드
+├── rag/                   # PDF 로딩, 청킹, 임베딩, Hybrid Retrieval
+├── tools/                 # LLM, Web Search, Query Rewrite, PDF 생성 도구
+├── tests/                 # 자동 테스트
+├── outputs/               # PDF 보고서, State, 로그
+├── app.py                 # CLI 실행 스크립트
+├── graph.py               # LangGraph Workflow
+├── state.py               # ResearchState Schema
+└── README.md
+```
 
-### State와 루프 규칙
-
-- 각 병렬 평가 Agent는 자신의 `*_analysis`만 쓴다. 공용 list reducer에 기대지 않는다.
-- `references`는 Report Agent가 본문에 **실제로 인용한 출처만** 중복 제거해 생성한다. 이후 찾은 반대 근거도 인용되면 최종 State에 포함한다.
-- `missing_evidence`는 검사/기록 노드만 변경한다. 1차 재검색 성공 시 기존 1차 부족 목록은 해소된다.
-- `retry_count`는 하나의 검색 루프를 나타내는 int이며 기본 한도는 2회다. `--max-retries 0`으로 재검색 없이 계속할 수도 있다.
-- Query Rewrite는 수업의 `04-QueryRewrite.ipynb`와 같은 `PromptTemplate | init_chat_model | StrOutputParser` 체인을 별도 Graph 노드에서 실행한다. 실제 재검색 질의는 `search_queries` State에 보존한다.
-- 한도를 소진해도 부족 정보를 유지한 채 평가를 진행한다. 2차 부족은 기록만 하고 전체 Agent를 재실행하지 않는다.
-- 반대 근거 검증은 기본 관점당 주요 주장 2개, 총 최대 8개다. 가능한 경우 두 기술을 균등하게 선택한다. 검색 0건은 not_found지만 API 실패는 예외다.
-
-## RAG 구현
-
-문서: 핵심 ITME·CXL-PIM과 보조 InfiniGen·PagedAttention·Mooncake·CENT·CacheGen, 총 7개 116페이지다. 최대 허용은 200페이지다.
-
-1. PyMuPDF로 페이지별 텍스트 블록을 추출하고 두 단 편집의 읽기 순서를 정리한다.
-2. 페이지·문단·절 경계를 보존한다. 긴 문단만 토큰 기준으로 나누고 겹침을 적용한다.
-3. `technology, document_id, page, chunk_id, role, source_url`을 모든 청크에 보존한다.
-4. E5 입력에 `query: ` / `passage: `를 붙이고 임베딩을 정규화한다.
-5. Dense 코사인 순위와 BM25 순위를 RRF `Σ 1/(60+rank)`로 결합한다.
-6. 기술/문서 역할 필터를 반영한 순위를 구한 뒤 top-k를 선택한다. 보조 논문은 각 문서의 기술명으로 분리해 대상 기술의 직접 근거와 섞지 않는다.
-
-Web Search는 수업의 `03-WebSearch.ipynb`에 사용된 `langchain_teddynote.tools.tavily.TavilySearch`와 `tavily_tool.search(...)` 호출을 직접 사용한다. 과제의 Evidence 필드에 맞추는 출처·ID 정규화만 수행한다.
-
-벡터 저장소는 **NumPy 정확 검색**이다. 이 소규모 코퍼스에서는 전체 행렬의 코사인 검색으로 충분하며, 로컬 검증 중 발견된 FAISS/PyTorch의 중복 OpenMP 충돌을 피한다. E5 + Dense/BM25라는 설계서는 유지하며, 특정 벡터 DB를 요구하지 않는다. 인덱스는 `vectors.npy`, `chunks.json`, `meta.json`으로 저장하고 pickle을 사용하지 않는다.
-
-모델 revision은 검증한 E5 버전으로 고정한다. PDF 내용·manifest·모델/revision·분할 설정·인덱스 형식이 바뀌면 새 캐시를 만든다. 기존 캐시는 삭제하지 않는다. 파일 해시/청크 수 검증에 실패한 캐시는 재생성한다.
-
-설계서 초기값에 맞춰 400토큰, 긴 문단 겹침 50토큰, Dense Top-K 10, BM25 Top-K 10, 최종 Top-K 10을 사용한다. **검색 정확도로 최적화한 수치는 아니다.** 실제 passage prefix와 특수 토큰을 포함해 512토큰 이하인지 검사한다. 표/그림의 수치는 OCR·표 구조 복원이 없으므로 자동 추출만으로 정확성을 보장하지 않는다.
-
-### 검색 평가
-
-`data/retrieval_queries.json`에 원리·실험 환경·성능·한계점 질의와 사람이 원문에서 확인한 정답 페이지를 기록했다.
+## Usage
 
 ```bash
-.venv/bin/python -m rag.evaluate --inspect
-.venv/bin/python -m rag.evaluate --k 10
+# 의존성 설치
+uv sync --frozen --extra rag --extra dev
+
+# .env에 OPENAI_API_KEY, TAVILY_API_KEY 설정 후 실행
+.venv/bin/python app.py --check
+.venv/bin/python app.py --index
+.venv/bin/python app.py --run
+
+# 외부 API 없이 Graph 흐름 확인
+.venv/bin/python app.py --demo
 ```
 
-Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정답 라벨이 없으면 점수 계산을 거부한다. 동일한 8개 질의와 Top-K 10에서 base와 small을 비교했으며, base가 Dense/Hybrid Hit Rate@10 1.0으로 small의 0.875보다 높아 설계 기준 모델을 유지한다. 현재 base 결과는 Dense 1.0/0.733, BM25 0.875/0.567, Hybrid 1.0/0.617(Hit Rate/MRR)이다. Hybrid는 어휘 검색의 누락을 보완하지만 항상 Dense보다 상위 순위를 만든다고 해석하지 않는다.
+최종 보고서는 `outputs/날짜-실행ID/report.pdf`에 저장된다.
 
-## 근거와 보고서 검증 범위
+## Contributors
 
-- LLM은 Pydantic 기반 구조화 출력으로 응답한다. 가져온 문서/웹 내용은 지시문이 아닌 비신뢰 자료로 취급한다.
-- 인용문이 전달한 청크에 존재하는지, 출처/페이지 및 근거 ID가 유효한지 확인한다.
-- 성능 수치는 실험 조건의 원문 인용과 해당 청크를 함께 요구한다. 같은 논문의 다른 페이지에 있는 조건도 연결할 수 있다.
-- 다른 기술의 근거만으로 대상 기술을 평가한 주장은 제외한다. TRL은 공개 정보 기반 추정임을 표시한다.
-- 웹 자료는 direct/ecosystem/comparison 범위로 구분한다. 상위 시장·생태계 근거는 개별 기술의 제품화나 고객 도입 Fact로 승격하지 않고 제한적 해석으로 표시한다.
-- 근거 탈락은 인용 불일치, 수치·조건 불일치, 기술 불일치, 낮은 출처 등급 등 사유별로 로그에 집계한다.
-- 조건이 다른 수치는 우열의 직접 근거로 사용하지 않도록 요청하고, 수치 근거의 조건과 비교 제한을 보고서에 남긴다.
-- 인용문 일치와 ID 검사는 **의미적 사실 검증을 완전히 대신하지 않는다**. 주장과 인용의 의미적 일치, 수치/단위, 추정 TRL, 웹 자료의 최신성은 최종 제출 전 검토가 필요하다.
-- SUMMARY는 700자 이내로 제한한다. 최종 구조는 SUMMARY, 1~6장, REFERENCE만 사용하며 검증 내용은 5~6장에 포함한다. 개별 부족 항목을 반복 출력하지 않고 기술·관점별로 묶어 자료 범위와 판단 영향을 설명한다. 실제 반 페이지 여부는 제출 문서의 글꼴/레이아웃에 따라 확인해야 한다.
+- **Jung Jin-woo** : Agentic RAG Workflow, Evidence Validation, Logging, PDF Report
+- **sjjeon0925** : Project Structure, Agent/RAG Refactoring, Evidence Guard
+- **gncnWkd** : RAG Pipeline, Retrieval Evaluation, Evidence Validation
+- **정현주** : LangChain Refactoring, Query Rewrite, Document/Retrieval Configuration
 
-## 실행 흐름 로그
-
-기본 로그는 stderr와 `outputs/logs/`에 함께 저장된다. 보고서/State/Mermaid 출력은 stdout이다.
-
-```bash
-.venv/bin/python app.py --demo --scenario retry_exhausted --log-level DEBUG
-.venv/bin/python app.py --run --log-file outputs/custom-workflow.log
-```
-
-| 로그 | 의미 |
-| --- | --- |
-| RUN_START / RUN_DONE / RUN_FAILED | 전체 실행 시작·완료·실패 |
-| GRAPH_BUILD / GRAPH_READY | Graph 구성·컴파일 |
-| NODE_START / NODE_DONE / NODE_FAILED | 노드, 시간, 갱신 State 필드/크기, 오류 위치 |
-| ROUTE_SELECTED / QUERY_REWRITE / RETRY_EXHAUSTED | 분기, 재검색 전략, 한도 소진 |
-| FAN_OUT / FAN_IN / EVALUATIONS_JOINED | 4개 병렬 평가 시작과 합류 |
-| OP_START / OP_DONE / OP_FAILED | PDF·분할·임베딩·검색·API 처리 단계 |
-| EVIDENCE_CHECK / EVIDENCE_EXTRACTED | 부족 개수, 채택/제외 근거 수 |
-| EVALUATION_READY / COUNTER_RESULT / CONFLICT_RESULT | 관점 결과와 검증 결과 |
-| LLM_USAGE / REPORT_CITATIONS / REPORT_SAVED | 토큰 수, 인용 수, 저장 위치 |
-
-모든 내부 로그에 실행 ID를 유지한다. DEBUG도 원문·프롬프트·키·외부 오류 본문은 기록하지 않고 필드 크기만 표시한다. 예외를 삼키지 않으며 CLI 종료 코드는 실패 시 1이다.
-
-## 검증과 남은 확인
-
-- 자동 테스트: 정상 흐름, 재검색 성공/소진, 2차 부족, 병렬 합류, 반대 근거, 출처 검증, API 오류, 로그 비노출, PDF 로딩/분할, 캐시 재사용/손상 검출.
-- 실제 E5 임베딩 및 논문 인덱스/검색은 별도 smoke test로 확인한다.
-- 실제 모델·웹 검색을 모두 연결한 보고서의 내용 품질은 아직 검증하지 않았다. Tavily 키 설정 후 `--run`으로 검증해야 한다.
-- DEMO 보고서는 실행 검증용이다. 정량 검색 평가 점수와 실제 평가 보고서가 생성됐다고 간주하지 않는다.
-- 조원별 Contributors는 실제 수행 역할을 확인해 작성한다.
-
-## 구현 참고
-
-[OpenAI 구조화 출력](https://developers.openai.com/api/docs/guides/structured-outputs), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), [E5 모델 카드](https://huggingface.co/intfloat/multilingual-e5-base), [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search).
-
-현재 동작과 실행 방법은 이 README와 코드가 기준이다.
+> Contributors의 역할은 Git 커밋 이력을 기준으로 정리했으며, 제출 전 실제 업무 분담과 대조해 최종 확정한다.
