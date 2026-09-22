@@ -73,22 +73,75 @@ def synthesis_fallback(state):
     for finding in findings:
         by_criterion.setdefault(finding["criterion"], []).append(finding)
     common = [
-        f"- 두 기술 모두 {criterion} 항목에서 근거가 확인되었다: "
-        + " / ".join(f"{x['technology']} {x['claim']}" for x in rows)
+        {
+            "text": f"두 기술 모두 {criterion} 관점에서 공개 근거가 확인되었다. "
+            + " / ".join(f"{x['technology']}: {x['claim']}" for x in rows),
+            "evidence_ids": list(dict.fromkeys(eid for row in rows for eid in row["evidence_ids"])),
+        }
         for criterion, rows in by_criterion.items()
         if len({x["technology"] for x in rows}) > 1
     ]
-    tradeoffs = [
-        "- " + conflict["description"] + " " + conflict.get("implication", "")
+    differences = [
+        {
+            "text": conflict["description"] + " " + conflict.get("implication", ""),
+            "evidence_ids": conflict["evidence_ids"],
+        }
         for conflict in state["conflicts"]
     ]
-    summary_line = (
-        "- 확인된 근거 범위에서는 두 기술의 우열을 판정할 수 없으며, "
-        f"미확인 항목 {len(state['missing_evidence'])}건이 남아 있다. "
-        "아래 관점별 결과와 상충 내용을 함께 고려해야 한다."
-    )
-    conclusion = [summary_line] if findings else []
-    return {"5.1": common, "5.3": tradeoffs, "5.4": conclusion}
+    tradeoffs = list(differences)
+    conclusion = []
+    if findings:
+        representative = []
+        for technology in technology_names(state):
+            representative.extend(
+                next((x["evidence_ids"] for x in findings if x["technology"] == technology), [])
+            )
+        conclusion = [
+            {
+                "text": (
+                    "확인된 근거 범위에서는 단일한 우위를 확정하기보다, 메모리 용량 확장, "
+                    "데이터 이동, 구현 복잡도와 공개 검증 수준을 함께 고려해야 한다. "
+                    "공개되지 않은 항목은 부정적 결과가 아니라 판단 범위의 한계로 해석한다."
+                ),
+                "evidence_ids": list(dict.fromkeys(representative)),
+            }
+        ]
+    return {"5.1": common, "5.2": differences, "5.3": tradeoffs, "5.4": conclusion}
+
+
+def _unique_lines(lines, limit=None):
+    result, seen = [], set()
+    for line in lines:
+        key = re.sub(r"\s+", " ", line).strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(line)
+        if limit and len(result) >= limit:
+            break
+    return result
+
+
+def _gap_summary(gaps):
+    grouped = {}
+    for gap in gaps:
+        key = (gap["technology"], gap.get("perspective", "technical"))
+        grouped.setdefault(key, []).append(gap["item"])
+    labels = {
+        "technical": "기술 조사",
+        "trl": "기술 성숙도",
+        "market": "시장성",
+        "stakeholder": "이해관계자",
+        "domain": "데이터센터 적용성",
+    }
+    return [
+        (
+            f"- {technology}의 {labels.get(perspective, perspective)}에서 공개 직접 근거가 제한된 항목: "
+            f"{', '.join(dict.fromkeys(items))}. 이는 부정적 판정이 아니라 현재 공개 자료로 확정할 수 있는 "
+            "범위의 한계이며, 관련 생태계·구조적 근거는 해당 평가 절에 별도로 제시했다."
+        )
+        for (technology, perspective), items in grouped.items()
+    ]
 
 
 def trl_levels(state, technology):
@@ -139,6 +192,7 @@ def _render_report(state, draft, *, mode="live"):
         return paragraph["text"].strip() + " ⟦CITE:" + "|".join(ids) + "⟧"
 
     supplemental = {section_id: [] for section_id in SECTIONS}
+    section_limitations = {section_id: [] for section_id in SECTIONS}
     fallback = synthesis_fallback(state)
     for index, selection in enumerate(state["technologies"], 1):
         supplemental[f"2.{index}"].append(
@@ -150,6 +204,10 @@ def _render_report(state, draft, *, mode="live"):
         analysis = state[f"{perspective}_analysis"]
         for finding in analysis.get("findings", []):
             label = f"[{finding['kind']}] {finding['technology']}: {finding['claim']}"
+            if finding.get("evidence_scope") == "ecosystem":
+                label += " (상위 시장·생태계 근거를 이용한 제한적 해석)"
+            elif finding.get("evidence_scope") == "comparison":
+                label += " (비교 기술 근거를 이용한 구조적 해석)"
             if finding.get("trl_level") is not None:
                 spread = trl_levels(state, finding["technology"])
                 label += (
@@ -172,24 +230,73 @@ def _render_report(state, draft, *, mode="live"):
             if text:
                 supplemental[section_id].append("- " + text)
                 if finding.get("limitation"):
-                    supplemental[section_id].append("  - 한계: " + finding["limitation"])
-        supplemental[section_id].extend(
-            "- 평가 한계: " + limitation for limitation in analysis.get("limitations", [])
+                    section_limitations[section_id].append(
+                        f"- {finding['technology']} 평가 한계: {finding['limitation']}"
+                    )
+        section_limitations[section_id].extend(
+            "- 공통 평가 한계: " + limitation for limitation in analysis.get("limitations", [])
         )
 
+    for section_id, limitations in section_limitations.items():
+        supplemental[section_id].extend(_unique_lines(limitations, limit=4))
+
+    technical_items = set()
     for eid, item in state["technical_evidence"].items():
-        if not item.get("numeric") or item["technology"] not in technologies:
+        if item["technology"] not in technologies:
             continue
         section_id = "3.1" if item["technology"] == technologies[0] else "3.2"
-        condition = item.get("experimental_condition") or "실험 조건 미확인"
+        item_key = (item["technology"], item.get("item"))
+        if item_key in technical_items:
+            continue
+        technical_items.add(item_key)
+        condition = item.get("experimental_condition")
+        description = f"{item.get('item', '기술 근거')}: {item['claim']}"
+        if item.get("numeric") and condition:
+            description += f" / 적용된 실험 조건: {condition}"
         text = cited(
             {
-                "text": f"수치 결과: {item['claim']} / 실험 조건: {condition}",
+                "text": description,
                 "evidence_ids": [eid],
             }
         )
         if text:
             supplemental[section_id].append("- " + text)
+
+    first_by_technology = {
+        technology: next(
+            (item for item in state["technical_evidence"].values() if item["technology"] == technology),
+            None,
+        )
+        for technology in technologies
+    }
+    background = [item for item in first_by_technology.values() if item]
+    if background:
+        text = cited(
+            {
+                "text": (
+                    "장문맥 LLM 추론의 KV Cache 문제를 대상으로, 외부 계층형 메모리 확장과 "
+                    "메모리 근접 연산이 용량·데이터 이동·구축 복잡도에 미치는 영향을 비교한다."
+                ),
+                "evidence_ids": [item["evidence_id"] for item in background],
+            }
+        )
+        if text:
+            supplemental["1.1"].append(text)
+
+    if len(background) == len(technologies):
+        text = cited(
+            {
+                "text": (
+                    f"{technologies[0]}는 {state['technologies'][0]['key_approach']}을 중심으로 하고, "
+                    f"{technologies[1]}은 {state['technologies'][1]['key_approach']}을 중심으로 한다. "
+                    "따라서 동일 조건의 단순 성능 서열보다 저장 위치, 연산 위치와 데이터 이동 경로의 차이를 "
+                    "중심으로 해석해야 한다."
+                ),
+                "evidence_ids": [item["evidence_id"] for item in background],
+            }
+        )
+        if text:
+            supplemental["3.3"].append(text)
 
     for counter in state["counter_evidence"].values():
         if counter["status"] == "found":
@@ -203,9 +310,9 @@ def _render_report(state, draft, *, mode="live"):
             if text:
                 supplemental["6.3"].append("- " + text)
         else:
-            supplemental["6.3"].append(
-                "- 반대 근거 미확인: " + counter["target_claim"] + " (주장별 Web Search 1회 범위)"
-            )
+            # 개별 실패 문장을 반복하지 않는다. 검색 범위와 채택 수는
+            # 아래 6.3 검증 요약에서 한 번만 설명한다.
+            continue
 
     for conflict in state["conflicts"]:
         description = conflict["description"]
@@ -230,7 +337,22 @@ def _render_report(state, draft, *, mode="live"):
             lines.extend([text, ""])
             length += len(paragraph["text"])
     if not length:
-        lines.extend(["확인된 근거만으로 요약 결론을 작성하기에 정보가 부족합니다.", ""])
+        candidates = state["synthesis"].get("conclusion", []) or fallback.get("5.4", [])
+        for paragraph in candidates[:1]:
+            text = cited(paragraph)
+            if text:
+                lines.extend([text, ""])
+                length += len(paragraph["text"])
+        if not length:
+            lines.extend(
+                [
+                    (
+                        "공개 근거의 범위와 품질을 우선 확인했으며, 확인되지 않은 항목은 기술의 실패가 "
+                        "아니라 현재 자료로 판단할 수 없는 범위로 분리했다."
+                    ),
+                    "",
+                ]
+            )
     content = {}
     for section in draft.get("sections", []):
         if section["section_id"] in SECTIONS:
@@ -266,10 +388,14 @@ def _render_report(state, draft, *, mode="live"):
                 "제품화·실제 도입 근거는 공개 자료에서 확인되지 않았다.",
             )
         elif section_id == "6.1":
-            for gap in state["missing_evidence"]:
+            paragraphs.extend(_gap_summary(state["missing_evidence"]))
+            low_tier = sum(
+                item.get("role") == "web" and item.get("source_tier", 5) == 5 for item in evidence.values()
+            )
+            if low_tier:
                 paragraphs.append(
-                    f"- 미확인: {gap['technology']} / {gap.get('perspective', 'technical')} / "
-                    f"{gap['item']} ({gap['reason']})"
+                    f"- 2차 웹 자료 {low_tier}건은 개별 기술의 직접 Fact가 아니라 업계 관측·생태계 맥락과 "
+                    "제한적 Inference에만 사용했다. 제품화·도입 판단은 논문·공식 자료와 분리했다."
                 )
         elif section_id == "6.2":
             paragraphs.append(
@@ -285,14 +411,23 @@ def _render_report(state, draft, *, mode="live"):
                 "인용문 일치는 자동 확인했으나 주장과 인용의 의미적 일치에는 사람의 검토가 필요하다."
             )
         paragraphs.extend(supplemental[section_id])
+        paragraphs = _unique_lines(paragraphs)
         if not paragraphs and fallback.get(section_id):
             # Synthesis가 탈락한 절은 이미 검증된 finding·conflict로 재조합한다.
-            get_logger().info("SECTION_FALLBACK | section=%s | items=%d", section_id, len(fallback[section_id]))
+            get_logger().info(
+                "SECTION_FALLBACK | section=%s | items=%d", section_id, len(fallback[section_id])
+            )
+            paragraphs = ["아래 내용은 4장의 검증된 평가 결과를 재구성한 것이다."]
+            paragraphs.extend(text for item in fallback[section_id] if (text := cited(item)))
+        if not paragraphs:
             paragraphs = [
-                "아래 내용은 4장의 검증된 평가 결과를 재구성한 것이다.",
-                *fallback[section_id],
+                (
+                    "이 절의 세부 항목을 단독으로 확정할 직접 근거는 제한적이다. "
+                    "확인된 기술 구조와 인접 평가 결과는 다른 절에 제시하고, 자료 공백이 결론의 우열로 "
+                    "해석되지 않도록 분석 범위를 제한했다."
+                )
             ]
-        lines.extend(paragraphs or ["검증된 자료로 작성할 내용이 부족합니다."])
+        lines.extend(paragraphs)
         lines.append("")
 
     refs = collect_references({eid: evidence[eid] for eid in sorted(used)})
@@ -340,8 +475,22 @@ def contents_writer(state, services):
         "domain": state["domain"],
         # 원문 청크와 인용문은 넘기지 않는다. 검증된 결과만 전달해 재작성을 막는다.
         "evidence": {
-            eid: {k: v for k, v in item.items() if k in ("evidence_id", "technology", "perspective",
-                                                         "item", "claim", "kind", "source", "page", "scope")}
+            eid: {
+                k: v
+                for k, v in item.items()
+                if k
+                in (
+                    "evidence_id",
+                    "technology",
+                    "perspective",
+                    "item",
+                    "claim",
+                    "kind",
+                    "source",
+                    "page",
+                    "scope",
+                )
+            }
             for eid, item in all_evidence(state).items()
         },
         "synthesis": state["synthesis"],

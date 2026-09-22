@@ -2,10 +2,6 @@
 
 데이터센터·클라우드의 KV Cache 관리 기술을 조사하고, TRL·시장·이해관계자·도메인 관점으로 평가하여 근거가 연결된 보고서를 생성한다. 기술은 사람이 선정하며 특정 기술의 승자를 정하지 않는다.
 
-현재 브랜치: `feat/agentic-rag-evidence-workflow`
-
-작업 기준: pull 당시 커밋 `334208a` + 최신 조별 DOCX 설계서. 이전 로컬 로그 수정은 Git stash에 보존했다. 원본 설계서와 논문 PDF는 수정하지 않았다.
-
 ## 빠른 실행
 
 프로젝트 폴더에서 Python 3.11~3.13과 uv를 사용한다.
@@ -37,7 +33,7 @@ uv sync --frozen --extra rag --extra dev
 - `--check`: 패키지·키 존재·PDF 경로 점검. 키 값은 표시하지 않고, 인증/잔액/모델 권한까지 검증하지는 않는다.
 - `--index`: 첫 실행 시 공개 E5 모델 다운로드. 논문 임베딩은 로컬에서 수행한다. API 키 불필요.
 - `--run`: OpenAI 및 Tavily를 호출하며 비용이 발생할 수 있다. 모델 거부, API 인증/통신 오류는 실패로 종료하며 DEMO로 자동 대체하지 않는다.
-- 다른 환경 파일: `--env-file /절대경로/.env`. 명시적인 셸 환경변수가 dotenv보다 우선한다.
+- 다른 환경 파일: `--env-file /절대경로/.env`. 선택한 dotenv 파일의 값이 기존 셸 환경변수보다 우선한다.
 - 모델·청크·검색 설정은 `.env.example` 참고. 원문 청크/발췌와 질문은 분석을 위해 OpenAI로, 검색 질의는 Tavily로 전송된다. 민감한 비공개 문서를 넣기 전 전송 범위를 확인한다.
 
 ### 저장 결과
@@ -46,12 +42,12 @@ uv sync --frozen --extra rag --extra dev
 outputs/
   logs/날짜-실행ID.log
   날짜-실행ID/
-    report.md     # SUMMARY, 1~6장, 근거 부록, 실제 인용한 REFERENCE
+    report.pdf    # SUMMARY, 1~6장, 본문 인용과 실제 사용한 REFERENCE
     state.json    # 16개 State 필드, 실제 검색 질의 및 근거/평가 결과
     run.json      # 실행 모드, 모델/검색 설정, 생성 시각
 ```
 
-현재 보고서 출력 형식은 Markdown이다. PDF/DOCX 변환기는 포함하지 않는다. `state.json`에는 인용문 등 자료 내용이 있으므로 로그와 달리 민감정보 포함 가능성이 있다. 결과·모델 캐시·인덱스·.env는 Git 추적에서 제외한다.
+최종 사용자 보고서는 한국어 폰트를 포함한 A4 PDF로 저장한다. 검증된 Markdown 문자열은 PDF 렌더링의 내부 중간 표현이며 `state.json`의 `final_report`에 재현용으로 보존된다. `state.json`에는 인용문 등 자료 내용이 있으므로 로그와 달리 민감정보 포함 가능성이 있다. 결과·모델 캐시·인덱스·.env는 Git 추적에서 제외한다.
 
 ## 설계서 실행 흐름
 
@@ -89,8 +85,8 @@ flowchart TD
 | --- | --- | --- |
 | 기술 조사 | agents/technical.py | 핵심 논문 RAG, 보고서에 명시된 8개 조사 항목의 인용 근거 추출 |
 | TRL | agents/trl.py | technical_evidence + Web, 추정 성숙도; Vector DB 직접 호출 없음 |
-| 시장 | agents/market.py | Web 자료로 제품화·생태계·도입 장벽 |
-| 이해관계자 | agents/stakeholder.py | Web 자료로 개발자·도입 기업·HW 업체·산업계 |
+| 시장 | agents/market.py | Web 자료로 제품화·도입·생태계·시장 성장성·도입 장벽 |
+| 이해관계자 | agents/stakeholder.py | Web 자료로 경쟁 진영·도입 기업/개발자·투자 업계 관점 평가 |
 | 도메인 | agents/domain.py | RAG + 기술 근거, 용량·성능·데이터 이동·확장성·비용/구축의 5개 기준; 비교 문서는 보조 자료로 분리 |
 | 종합 | agents/synthesis.py | 4개 평가·반대 근거·상충·부족 항목 종합, 추가 검색 없음 |
 | 보고서 | agents/report.py | contents_writer → report_generator, 새 평가/검색 없이 기존 결과를 목차에 맞춰 구성 |
@@ -137,7 +133,7 @@ Web Search는 수업의 `03-WebSearch.ipynb`에 사용된 `langchain_teddynote.t
 .venv/bin/python -m rag.evaluate --k 10
 ```
 
-Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정답 라벨이 없으면 점수 계산을 거부한다. 동일한 8개 질의와 Top-K 10에서 base와 small을 비교했으며, base가 Dense/Hybrid Hit Rate@10 1.0으로 small의 0.875보다 높아 설계 기준 모델을 유지한다.
+Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정답 라벨이 없으면 점수 계산을 거부한다. 동일한 8개 질의와 Top-K 10에서 base와 small을 비교했으며, base가 Dense/Hybrid Hit Rate@10 1.0으로 small의 0.875보다 높아 설계 기준 모델을 유지한다. 현재 base 결과는 Dense 1.0/0.733, BM25 0.875/0.567, Hybrid 1.0/0.617(Hit Rate/MRR)이다. Hybrid는 어휘 검색의 누락을 보완하지만 항상 Dense보다 상위 순위를 만든다고 해석하지 않는다.
 
 ## 근거와 보고서 검증 범위
 
@@ -145,9 +141,11 @@ Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정�
 - 인용문이 전달한 청크에 존재하는지, 출처/페이지 및 근거 ID가 유효한지 확인한다.
 - 성능 수치는 실험 조건의 원문 인용과 해당 청크를 함께 요구한다. 같은 논문의 다른 페이지에 있는 조건도 연결할 수 있다.
 - 다른 기술의 근거만으로 대상 기술을 평가한 주장은 제외한다. TRL은 공개 정보 기반 추정임을 표시한다.
+- 웹 자료는 direct/ecosystem/comparison 범위로 구분한다. 상위 시장·생태계 근거는 개별 기술의 제품화나 고객 도입 Fact로 승격하지 않고 제한적 해석으로 표시한다.
+- 근거 탈락은 인용 불일치, 수치·조건 불일치, 기술 불일치, 낮은 출처 등급 등 사유별로 로그에 집계한다.
 - 조건이 다른 수치는 우열의 직접 근거로 사용하지 않도록 요청하고, 수치 근거의 조건과 비교 제한을 보고서에 남긴다.
 - 인용문 일치와 ID 검사는 **의미적 사실 검증을 완전히 대신하지 않는다**. 주장과 인용의 의미적 일치, 수치/단위, 추정 TRL, 웹 자료의 최신성은 최종 제출 전 검토가 필요하다.
-- SUMMARY는 700자 이내로 제한한다. 최종 구조는 SUMMARY, 1~6장, REFERENCE만 사용하며 검증 내용은 5~6장에 포함한다. 실제 반 페이지 여부는 제출 문서의 글꼴/레이아웃에 따라 확인해야 한다.
+- SUMMARY는 700자 이내로 제한한다. 최종 구조는 SUMMARY, 1~6장, REFERENCE만 사용하며 검증 내용은 5~6장에 포함한다. 개별 부족 항목을 반복 출력하지 않고 기술·관점별로 묶어 자료 범위와 판단 영향을 설명한다. 실제 반 페이지 여부는 제출 문서의 글꼴/레이아웃에 따라 확인해야 한다.
 
 ## 실행 흐름 로그
 
@@ -184,4 +182,4 @@ Dense/BM25/Hybrid별 페이지 기준 Hit Rate@K 및 MRR@K를 계산한다. 정�
 
 [OpenAI 구조화 출력](https://developers.openai.com/api/docs/guides/structured-outputs), [LangGraph Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api), [E5 모델 카드](https://huggingface.co/intfloat/multilingual-e5-base), [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search).
 
-`handout.md`와 `note.md`는 이전 작업 분담/설계 기록이다. 현재 동작은 최신 DOCX를 반영한 이 README와 코드가 기준이다.
+현재 동작과 실행 방법은 이 README와 코드가 기준이다.

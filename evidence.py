@@ -2,6 +2,8 @@
 
 import hashlib
 import re
+from collections import Counter
+from urllib.parse import urlsplit
 
 from config import FACT_MAX_TIER, PERSPECTIVES, TECHNICAL_FACT_MAX_TIER
 from schemas import Extraction
@@ -24,6 +26,11 @@ UNIT = re.compile(
 )
 
 
+def quantitative_claim(text):
+    """성능·비용처럼 조건 검증이 필요한 수치 주장을 구분한다."""
+    return bool(UNIT.search(normalized(text)))
+
+
 def numeric_supported(claim, evidence):
     """주장에 쓰인 숫자와 단위가 인용 원문에 실제로 있는지 확인한다."""
     original = " ".join(
@@ -44,7 +51,8 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
     result = services.llm.generate(
         "extract:" + perspective,
         "자료에서 해당 기술의 항목별 근거를 추출한다. item은 items 중 하나만 사용. "
-        "quote는 claim을 지지하는 원문 그대로. 숫자 성능/비용 주장이면 numeric=true. "
+        "claim은 문장 중간이 잘리지 않은 완결된 한국어 문장으로 요약하고, "
+        "quote는 claim을 지지하는 원문 그대로 복사한다. 숫자 성능/비용 주장이면 numeric=true. "
         "numeric이면 단위·Baseline·GPU·모델·Context Length·요청 수·Batch 중 확인되는 실험 조건 원문을 "
         "experimental_condition에 복사하고 condition_chunk_id에 "
         "그 구절의 청크 ID를 넣는다. 동일 문서의 다른 페이지도 가능. 비수치면 두 필드는 빈 문자열. "
@@ -55,47 +63,49 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
         Extraction,
     )
     by_id = {x["chunk_id"]: x for x in chunks}
-    evidence, rejected = {}, 0
+    evidence, rejected = {}, Counter()
     for fact in result.facts:
         source = by_id.get(fact.chunk_id)
         condition_source = by_id.get(fact.condition_chunk_id)
-        if (
-            source is None
-            or fact.item not in items
-            or not fact.claim.strip()
-            or not quote_exists(fact.quote, source["content"])
-            # 다른 기술의 자료를 대상 기술 근거로 쓰지 않는다.
-            or (source.get("role") == "core" and source.get("technology") != technology)
-            # 주장에 쓰인 수치·단위가 원문에 없으면 채택하지 않는다.
-            or not numeric_supported(fact.claim, [{"quote": fact.quote,
-                                                   "experimental_condition": fact.experimental_condition}])
-            # 저품질 출처는 Opinion으로만 쓴다. 기술 Fact는 논문·공식 문서만 인정한다.
-            # (demo는 가상 URL이라 등급 정책을 적용하지 않는다.)
-            or (
-                getattr(services, "mode", "live") != "demo"
-                and
-                fact.kind == "Fact"
-                and source.get("role") == "web"
-                and source.get("source_tier", 5)
-                > (TECHNICAL_FACT_MAX_TIER if perspective in ("technical", "domain", "trl") else FACT_MAX_TIER)
-            )
-            or (
-                (fact.speaker and normalized(fact.speaker).lower() not in normalized(source["content"]).lower())
-                or (
-                    fact.affiliation
-                    and normalized(fact.affiliation).lower() not in normalized(source["content"]).lower()
-                )
-            )
-            or (
-                fact.numeric
-                and (
-                    condition_source is None
-                    or condition_source["document_id"] != source["document_id"]
-                    or not quote_exists(fact.experimental_condition, condition_source["content"])
-                )
-            )
+        reason = ""
+        if source is None:
+            reason = "unknown_chunk"
+        elif fact.item not in items:
+            reason = "invalid_item"
+        elif not fact.claim.strip():
+            reason = "empty_claim"
+        elif not quote_exists(fact.quote, source["content"]):
+            reason = "quote_mismatch"
+        elif source.get("role") == "core" and source.get("technology") != technology:
+            reason = "technology_mismatch"
+        elif not numeric_supported(
+            fact.claim,
+            [{"quote": fact.quote, "experimental_condition": fact.experimental_condition}],
         ):
-            rejected += 1
+            reason = "numeric_mismatch"
+        elif (
+            getattr(services, "mode", "live") != "demo"
+            and fact.kind == "Fact"
+            and source.get("role") == "web"
+            and source.get("source_tier", 5)
+            > (TECHNICAL_FACT_MAX_TIER if perspective in ("technical", "domain", "trl") else FACT_MAX_TIER)
+        ):
+            reason = "low_source_tier"
+        elif fact.speaker and normalized(fact.speaker).lower() not in normalized(source["content"]).lower():
+            reason = "speaker_mismatch"
+        elif (
+            fact.affiliation
+            and normalized(fact.affiliation).lower() not in normalized(source["content"]).lower()
+        ):
+            reason = "affiliation_mismatch"
+        elif fact.numeric and (
+            condition_source is None
+            or condition_source["document_id"] != source["document_id"]
+            or not quote_exists(fact.experimental_condition, condition_source["content"])
+        ):
+            reason = "numeric_condition_missing"
+        if reason:
+            rejected[reason] += 1
             continue
         identifier = (
             fact.chunk_id
@@ -128,10 +138,11 @@ def extract_evidence(services, chunks, *, technology, perspective, items):
             "affiliation": fact.affiliation,
         }
     get_logger().info(
-        "EVIDENCE_EXTRACTED | perspective=%s | accepted=%d | rejected=%d",
+        "EVIDENCE_EXTRACTED | perspective=%s | accepted=%d | rejected=%d | reasons=%s",
         perspective,
         len(evidence),
-        rejected,
+        sum(rejected.values()),
+        ",".join(f"{key}:{value}" for key, value in sorted(rejected.items())) or "none",
     )
     return evidence
 
@@ -164,15 +175,26 @@ def valid_ids(ids, evidence):
     return bool(ids) and all(i in evidence and valid_evidence(evidence[i]) for i in ids)
 
 
+def _reference_key(item):
+    url = item.get("source_url", "")
+    match = re.search(r"arxiv\.org/(?:abs|html|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?", url)
+    if match:
+        return "https://arxiv.org/abs/" + match.group(1)
+    if url:
+        parts = urlsplit(url)
+        return parts._replace(fragment="").geturl()
+    return item["source"]
+
+
 def collect_references(evidence):
     refs = {}
     for identifier, item in sorted(evidence.items()):
-        key = item.get("source_url") or item["source"]
+        key = _reference_key(item)
         ref = refs.setdefault(
             key,
             {
                 "source": item["source"],
-                "source_url": item.get("source_url", ""),
+                "source_url": key if key.startswith(("http://", "https://")) else item.get("source_url", ""),
                 "author": item.get("author", ""),
                 "year": item.get("year", ""),
                 "published_date": item.get("published_date", ""),
@@ -184,6 +206,13 @@ def collect_references(evidence):
                 "pages": [],
             },
         )
+        # 같은 arXiv 논문의 HTML 검색 결과와 manifest 논문이 함께 쓰이면
+        # 서지 정보가 풍부한 논문 메타데이터를 대표 Reference로 사용한다.
+        if item.get("source_type") == "paper" and ref.get("source_type") != "paper":
+            for field in ("source", "author", "year", "venue", "identifier"):
+                if item.get(field):
+                    ref[field] = item[field]
+            ref["source_type"] = "paper"
         ref["evidence_ids"].append(identifier)
         if item.get("page") is not None and item["page"] not in ref["pages"]:
             ref["pages"].append(item["page"])

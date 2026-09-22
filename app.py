@@ -24,6 +24,7 @@ def preflight(settings):
         "openai",
         "httpx",
         "pymupdf",
+        "reportlab",
         "numpy",
         "sentence_transformers",
         "rank_bm25",
@@ -44,9 +45,11 @@ def preflight(settings):
 def save_outputs(result, settings, run_id, output_dir, mode):
     from dataclasses import asdict
 
+    from tools.pdf_writer import render_pdf
+
     directory = output_dir / (datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S") + "-" + run_id)
     directory.mkdir(parents=True, exist_ok=False)
-    (directory / "report.md").write_text(result["final_report"], encoding="utf-8")
+    render_pdf(result["final_report"], directory / "report.pdf")
     (directory / "state.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "run.json").write_text(
         json.dumps(
@@ -81,7 +84,7 @@ def main(argv=None):
     )
     parser.add_argument("--rebuild-index", action="store_true")
     parser.add_argument("--max-retries", type=int, default=MAX_RETRIES)
-    parser.add_argument("--env-file", type=Path, help="명시한 dotenv 파일 사용; 셸 환경 우선")
+    parser.add_argument("--env-file", type=Path, help="명시한 dotenv 파일 사용; dotenv 값 우선")
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO")
     parser.add_argument("--log-file", type=Path)
@@ -99,7 +102,7 @@ def main(argv=None):
 
         if args.env_file and not args.env_file.is_file():
             raise FileNotFoundError("지정한 env 파일 없음")
-        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=False)
+        load_dotenv(args.env_file or PROJECT_ROOT / ".env", override=True)
         settings = Settings.from_env()
         state = initial_state(max_retries=args.max_retries)
         if args.show_state:
@@ -142,7 +145,7 @@ def main(argv=None):
                 len(result["final_report"]),
                 len(result["missing_evidence"]),
             )
-            print(result["final_report"])
+            print(directory / "report.pdf")
         if not any((args.show_state, args.show_graph, args.run, args.demo, args.index, args.check)):
             parser.print_help()
         return 0

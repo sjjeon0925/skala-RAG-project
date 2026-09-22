@@ -15,7 +15,6 @@ MAX_DOCUMENT_PAGES = 200
 MAX_RETRIES = 2
 DOCUMENT_MANIFEST = PROJECT_ROOT / "data" / "documents.json"
 INDEX_DIR = PROJECT_ROOT / "data" / "index"
-REPORT_TEMPLATE = PROJECT_ROOT / "prompts" / "report_outline.md"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 
 TECHNICAL_EVIDENCE_ITEMS = (

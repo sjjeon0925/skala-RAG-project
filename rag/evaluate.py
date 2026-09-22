@@ -63,7 +63,7 @@ def main():
         parser.error("gold_pages를 직접 검토하여 입력하세요. --inspect로 후보 확인 가능.")
     from dotenv import load_dotenv
 
-    load_dotenv(PROJECT_ROOT / ".env", override=False)
+    load_dotenv(PROJECT_ROOT / ".env", override=True)
     configure_logging()
     output = evaluate_queries(get_retriever(Settings.from_env()), queries, k=args.k, inspect=args.inspect)
     print(json.dumps(output, ensure_ascii=False, indent=2))

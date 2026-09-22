@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 from agents.report import render_report
 from demo import demo_services
-from evidence import extract_evidence, valid_ids
+from evidence import collect_references, extract_evidence, valid_ids
 from graph import build_graph
 from schemas import Extraction
 from state import initial_state
@@ -54,6 +54,7 @@ class EvidenceTests(unittest.TestCase):
         state["synthesis"]["summary"] = []
         for p in ("trl", "market", "stakeholder", "domain"):
             state[f"{p}_analysis"] = {}
+        state["technical_evidence"] = {}
         state["counter_evidence"] = {}
         state["conflicts"] = []
         report = render_report(
@@ -113,6 +114,33 @@ class EvidenceTests(unittest.TestCase):
                 services, [chunk, conditions], technology="ITME", perspective="technical", items=["성능"]
             )
         )
+
+    def test_arxiv_html_and_abstract_are_one_reference(self):
+        base = {
+            "source": "paper",
+            "author": "Author",
+            "year": "2026",
+            "venue": "arXiv",
+            "identifier": "arXiv:2606.12556",
+            "page": 1,
+        }
+        refs = collect_references(
+            {
+                "paper-id": {
+                    **base,
+                    "source_url": "https://arxiv.org/abs/2606.12556",
+                    "source_type": "paper",
+                },
+                "web-id": {
+                    **base,
+                    "source_url": "https://arxiv.org/html/2606.12556v2",
+                    "source_type": "web",
+                },
+            }
+        )
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(refs[0]["source_url"], "https://arxiv.org/abs/2606.12556")
+        self.assertEqual(set(refs[0]["evidence_ids"]), {"paper-id", "web-id"})
 
 
 if __name__ == "__main__":

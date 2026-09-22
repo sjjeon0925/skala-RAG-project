@@ -39,6 +39,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("## REFERENCE", state["final_report"])
         self.assertNotIn("근거 검증 부록", state["final_report"])
         self.assertNotIn("CITE:", state["final_report"])
+        self.assertNotIn("검증된 자료로 작성할 내용이 부족합니다", state["final_report"])
+        self.assertNotIn("미확인:", state["final_report"])
         for heading in (
             "## SUMMARY",
             "## 1. 분석 배경 및 문제 정의",
@@ -68,7 +70,8 @@ class WorkflowTests(unittest.TestCase):
         gaps = [x for x in state["missing_evidence"] if x["stage"] == 1]
         self.assertEqual(len(gaps), 16)
         self.assertTrue(all(x["status"] == "retry_exhausted" for x in gaps))
-        self.assertIn("미확인: ITME", state["final_report"])
+        self.assertIn("ITME의 기술 조사에서 공개 직접 근거가 제한된 항목", state["final_report"])
+        self.assertNotIn("검증된 자료로 작성할 내용이 부족합니다", state["final_report"])
 
     def test_zero_retries(self):
         state, services = self.run_scenario("retry_exhausted", max_retries=0)
@@ -111,7 +114,14 @@ class WorkflowTests(unittest.TestCase):
                 ["--demo", "--scenario", "retry_exhausted", "--output-dir", directory, "--log-level", "INFO"]
             )
             self.assertEqual(code, 0)
-            self.assertEqual(len(list(Path(directory).glob("*/report.md"))), 1)
+            reports = list(Path(directory).glob("*/report.pdf"))
+            self.assertEqual(len(reports), 1)
+            import pymupdf
+
+            with pymupdf.open(reports[0]) as report:
+                self.assertGreater(len(report), 1)
+                self.assertIn("ITME", "".join(page.get_text() for page in report))
+            self.assertEqual(list(Path(directory).glob("*/report.md")), [])
             self.assertEqual(len(list(Path(directory).glob("*/state.json"))), 1)
             logs = next(Path(directory).glob("logs/*.log")).read_text()
             for event in (
@@ -132,8 +142,13 @@ class WorkflowTests(unittest.TestCase):
             patch.dict("os.environ", {"OPENAI_API_KEY": "", "TAVILY_API_KEY": ""}),
             tempfile.TemporaryDirectory() as directory,
         ):
-            self.assertEqual(main(["--run", "--output-dir", directory]), 1)
-            self.assertEqual(list(Path(directory).glob("*/report.md")), [])
+            env_file = Path(directory) / "empty.env"
+            env_file.write_text("", encoding="utf-8")
+            self.assertEqual(
+                main(["--run", "--env-file", str(env_file), "--output-dir", directory]),
+                1,
+            )
+            self.assertEqual(list(Path(directory).glob("*/report.pdf")), [])
         configure_logging("ERROR")
 
     def test_show_graph_does_not_need_providers(self):

@@ -3,14 +3,57 @@
 from config import (
     EVALUATION_CRITERIA,
     EVALUATION_GUIDANCE,
+    FACT_MAX_TIER,
     QUERY_TERMS,
     TECH_PROFILES,
+    TECHNICAL_FACT_MAX_TIER,
 )
 from evidence import extract_evidence, valid_ids
 from schemas import Evaluation
 from state import technology_names
 from tools.web_search import relevance, web_search
 from workflow_logging import get_logger
+
+DIRECT_EVIDENCE_CRITERIA = {
+    "논문·PoC·Prototype",
+    "실환경 검증",
+    "상용 제품 여부",
+    "제품화",
+    "실제 도입",
+    "도입 기업·개발자",
+}
+
+
+def _scope(item):
+    if item.get("role") != "web":
+        return "direct" if item.get("role") == "core" else "comparison"
+    return item.get("scope", "ecosystem")
+
+
+def _finding_policy(item, selected, perspective):
+    """출처가 존재한다는 사실과 주장에 사용할 수 있다는 사실을 구분한다."""
+    scopes = {_scope(evidence) for evidence in selected}
+    item["evidence_scope"] = (
+        "direct" if "direct" in scopes else "ecosystem" if "ecosystem" in scopes else "comparison"
+    )
+    max_tier = TECHNICAL_FACT_MAX_TIER if perspective in ("technical", "domain", "trl") else FACT_MAX_TIER
+    trusted_fact = any(
+        evidence.get("role") != "web"
+        or (evidence.get("kind") == "Fact" and evidence.get("source_tier", 5) <= max_tier)
+        for evidence in selected
+    )
+    if item["kind"] == "Fact" and not trusted_fact:
+        return False, "낮은 등급의 웹 자료만으로 작성된 Fact를 제외함."
+    if item["criterion"] in DIRECT_EVIDENCE_CRITERIA and "direct" not in scopes:
+        # 상위 시장·생태계 자료도 주변 여건을 설명하는 Inference에는 사용할 수 있다.
+        # 개별 기술의 제품화·도입 Fact로 승격하지 않고 한계를 강제로 남긴다.
+        if item["kind"] == "Fact":
+            return False, "개별 기술의 직접 근거가 없는 제품화·도입 Fact를 제외함."
+        note = (
+            "상위 시장·생태계 자료를 이용한 제한적 해석이며, 해당 기술 자체의 제품화·도입을 입증하지 않는다."
+        )
+        item["limitation"] = (note + " " + item["limitation"]).strip()
+    return True, ""
 
 
 def evaluate(state, services, perspective, sources, evidence=None):
@@ -62,6 +105,11 @@ def evaluate(state, services, perspective, sources, evidence=None):
         ):
             limitations.append("근거 ID 또는 평가 항목 검증 실패로 일부 주장을 제외함.")
             continue
+        selected = [evidence[eid] for eid in item["evidence_ids"]]
+        accepted, policy_note = _finding_policy(item, selected, perspective)
+        if not accepted:
+            limitations.append(policy_note)
+            continue
         if perspective != "trl":
             item["trl_level"] = None
         elif item["trl_level"] is not None:
@@ -73,13 +121,12 @@ def evaluate(state, services, perspective, sources, evidence=None):
         {
             "technology": technology,
             "criterion": criterion,
-            "reason": "검증된 평가 주장 또는 연결 근거 부족",
+            "reason": "직접 근거 미공개 또는 검증된 평가 주장·연결 근거 부족",
         }
         for technology in technologies
         for criterion in EVALUATION_CRITERIA[perspective]
         if not any(
-            finding["technology"] == technology and finding["criterion"] == criterion
-            for finding in findings
+            finding["technology"] == technology and finding["criterion"] == criterion for finding in findings
         )
     ]
     get_logger().info(

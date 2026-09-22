@@ -2,11 +2,11 @@
 
 import hashlib
 
-from config import PERSPECTIVES
-from evidence import all_evidence, quote_exists, valid_ids
+from config import FACT_MAX_TIER, PERSPECTIVES, TECHNICAL_FACT_MAX_TIER
+from evidence import all_evidence, numeric_supported, quantitative_claim, quote_exists, valid_ids
 from schemas import Conflicts, CounterResult
 from state import technology_names
-from tools.web_search import web_search
+from tools.web_search import relevance, web_search
 from workflow_logging import get_logger
 
 
@@ -34,6 +34,13 @@ def counter_evidence_node(state, services):
                 f"{finding['technology']} {target[:350]} limitations contrary evidence",
                 max_results=services.settings.search_results,
             )
+            if services.mode != "demo":
+                sources = [
+                    {**source, "scope": scope}
+                    for source in sources
+                    if (scope := relevance(source["source"] + " " + source["content"], finding["technology"]))
+                    is not None
+                ]
             result = (
                 services.llm.generate(
                     "counter",
@@ -61,12 +68,24 @@ def counter_evidence_node(state, services):
                 "search_count": 1,
             }
             source = next((x for x in sources if result and x["chunk_id"] == result.source_id), None)
+            numeric = bool(result and quantitative_claim(result.counter_claim))
+            max_tier = TECHNICAL_FACT_MAX_TIER if perspective in ("trl", "domain") else FACT_MAX_TIER
             if (
                 result
                 and result.found
                 and source
                 and result.counter_claim.strip()
                 and quote_exists(result.quote, source["content"])
+                and numeric_supported(
+                    result.counter_claim,
+                    [{"quote": result.quote, "experimental_condition": result.experimental_condition}],
+                )
+                and (
+                    services.mode == "demo"
+                    or result.kind != "Fact"
+                    or source.get("source_tier", 5) <= max_tier
+                )
+                and (not numeric or bool(result.experimental_condition.strip()))
             ):
                 counter = {
                     **{k: v for k, v in source.items() if k != "content"},
@@ -77,7 +96,7 @@ def counter_evidence_node(state, services):
                     "quote": result.quote,
                     "item": "반대 근거",
                     "kind": result.kind,
-                    "numeric": False,
+                    "numeric": numeric,
                     "experimental_condition": result.experimental_condition,
                     "condition_source": {},
                     "speaker": "",
